@@ -66,6 +66,14 @@ npm run regression:medium-office
 npm run regression:official
 ```
 
+在公开推送前，建议先跑一遍仓库隐私检查：
+
+```powershell
+npm run privacy:check
+```
+
+它会扫描所有已跟踪文件，检查是否误提交了本机家目录、桌面目录或其他个人文件系统路径。GitHub Actions 也会自动执行这一步。
+
 仓库根目录还带了一个 Windows GitHub Actions workflow：
 
 - `.github/workflows/contam-mcp-regression.yml`

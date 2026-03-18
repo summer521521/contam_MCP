@@ -61,6 +61,10 @@ jobs:
         working-directory: contam-mcp
         run: npm ci
 
+      - name: Check repository privacy
+        working-directory: contam-mcp
+        run: npm run privacy:check
+
       - name: Download official NIST regression cases
         run: |
           New-Item -ItemType Directory -Force .\tmp\nist-cases | Out-Null
