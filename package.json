@@ -1,0 +1,42 @@
+{
+  "name": "contam-mcp",
+  "version": "0.1.0",
+  "description": "Windows-first MCP server that wraps CONTAM command-line tools and ContamX bridge controls.",
+  "type": "module",
+  "bin": {
+    "contam-mcp": "./bin/contam-mcp.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE",
+    "docs/",
+    "contam-mcp/src/",
+    "contam-mcp/scripts/",
+    "contam-mcp/README.md",
+    "contamw3.exe",
+    "contamx3.exe",
+    "olch2d32.dll",
+    "prjup.exe",
+    "simcomp.exe",
+    "simread.exe",
+    "ContamHelp.chm"
+  ],
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node ./bin/contam-mcp.js",
+    "privacy:check": "node ./contam-mcp/scripts/check-repo-privacy.mjs",
+    "regression:cottage": "node ./contam-mcp/scripts/regression-cottage.mjs",
+    "regression:medium-office": "node ./contam-mcp/scripts/regression-medium-office.mjs",
+    "regression:official": "npm run regression:cottage && npm run regression:medium-office"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^3.25.76"
+  }
+}

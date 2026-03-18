@@ -33,6 +33,19 @@ Host-specific setup examples are in:
 
 - [Host Setup Guide](docs/HOSTS.md)
 
+## Easiest Connection Option
+
+For public users, the easiest setup is now an `npx`-launched local server sourced from this repository.
+
+Use:
+
+```text
+command: npx
+args: -y --package github:summer521521/contam_MCP contam-mcp
+```
+
+This avoids manually pointing a host at a local `server.js` path.
+
 ## Main Capabilities
 
 - discover bundled CONTAM executables
@@ -49,11 +62,11 @@ Host-specific setup examples are in:
 
 ## Five-Minute Quickstart
 
-1. Clone or download this repository on Windows.
-2. Install dependencies in `contam-mcp`.
-3. Point your MCP host to `node <repo-root>\contam-mcp\src\server.js`.
-4. Restart the host.
-5. Ask the host to inspect or run a sample `.prj`.
+1. Configure your MCP host to run `npx -y --package github:summer521521/contam_MCP contam-mcp`.
+2. Restart the host.
+3. Ask the host to inspect or run a sample `.prj`.
+
+If you prefer a local clone, that path is still supported and documented in the host guide.
 
 For the full step-by-step tutorial, see:
 

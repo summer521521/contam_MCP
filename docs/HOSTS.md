@@ -2,16 +2,42 @@
 
 This guide shows how to connect `CONTAM MCP` to common MCP hosts.
 
-The server itself is a local `stdio` MCP server:
+There are now two supported connection styles:
 
-- command: `node`
-- args: `<repo-root>\contam-mcp\src\server.js`
+1. `npx` launch from the GitHub repository
+2. direct local path launch from a cloned repository
 
-As long as a host can launch a local `stdio` process and speak MCP, it can use this server.
+For most users, the `npx` option is the easiest.
+
+## Recommended Public Setup: `npx`
+
+Use this command shape:
+
+```text
+command: npx
+args: -y --package github:summer521521/contam_MCP contam-mcp
+```
+
+This tells the host to:
+
+- fetch the package from GitHub if needed
+- install the Node dependencies in the background
+- launch the `contam-mcp` CLI entry point
+
+It avoids hard-coding a local `server.js` path.
 
 ## Codex Desktop / Codex Windows App
 
-Add this to `~/.codex/config.toml`:
+Recommended `npx` setup:
+
+```toml
+[mcp_servers.contam]
+command = "npx"
+args = ["-y", "--package", "github:summer521521/contam_MCP", "contam-mcp"]
+tool_timeout_sec = 300
+```
+
+If you prefer a local clone, use:
 
 ```toml
 [mcp_servers.contam]
@@ -20,16 +46,18 @@ args = ["<repo-root>\\contam-mcp\\src\\server.js"]
 tool_timeout_sec = 300
 ```
 
-Restart Codex after saving the file.
-
 ## Claude Code
 
-Claude Code supports local `stdio` MCP servers through the `claude mcp add` command.
-
-Example:
+Recommended `npx` setup:
 
 ```powershell
-claude mcp add --transport stdio contam -- node C:\path\to\contam-mcp\src\server.js
+claude mcp add --transport stdio contam -- npx -y --package github:summer521521/contam_MCP contam-mcp
+```
+
+On native Windows, Anthropic documents that `npx`-based local MCP servers may require `cmd /c`. If direct `npx` launch fails, use:
+
+```powershell
+claude mcp add --transport stdio contam -- cmd /c npx -y --package github:summer521521/contam_MCP contam-mcp
 ```
 
 Useful follow-up commands:
@@ -39,34 +67,55 @@ claude mcp list
 claude mcp get contam
 ```
 
-If you want the configuration stored at a specific scope, use Claude Code's `--scope` option as documented by Anthropic.
-
 ## Claude Desktop
 
-Claude Desktop can also launch local `stdio` MCP servers through `claude_desktop_config.json`.
-
-Example:
+Recommended `npx` setup:
 
 ```json
 {
   "mcpServers": {
     "contam": {
       "type": "stdio",
-      "command": "node",
-      "args": ["C:\\path\\to\\contam-mcp\\src\\server.js"],
+      "command": "npx",
+      "args": ["-y", "--package", "github:summer521521/contam_MCP", "contam-mcp"],
       "env": {}
     }
   }
 }
 ```
 
-Restart Claude Desktop after saving the config.
+If the host environment needs an explicit shell wrapper on Windows, use:
+
+```json
+{
+  "mcpServers": {
+    "contam": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "--package", "github:summer521521/contam_MCP", "contam-mcp"],
+      "env": {}
+    }
+  }
+}
+```
 
 ## Cursor
 
-Cursor supports local MCP servers through `mcp.json`.
+Recommended `npx` setup:
 
-Example:
+```json
+{
+  "mcpServers": {
+    "contam": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "--package", "github:summer521521/contam_MCP", "contam-mcp"]
+    }
+  }
+}
+```
+
+If you prefer a local clone instead:
 
 ```json
 {
@@ -74,24 +123,33 @@ Example:
     "contam": {
       "type": "stdio",
       "command": "node",
-      "args": ["C:\\path\\to\\contam-mcp\\src\\server.js"]
+      "args": ["C:\\path\\to\\contam_MCP\\contam-mcp\\src\\server.js"]
     }
   }
 }
 ```
 
-Cursor's MCP documentation also supports optional `env` and `envFile` fields if you want to pass explicit executable paths or other settings.
-
 ## Generic MCP Hosts
 
-If your MCP host supports local `stdio` servers, point it at:
+If your host supports local `stdio` servers, the recommended generic setup is:
+
+```text
+command: npx
+args: -y --package github:summer521521/contam_MCP contam-mcp
+```
+
+The fallback local-clone setup is:
 
 ```text
 command: node
 args: <repo-root>\contam-mcp\src\server.js
 ```
 
-If your host supports environment variables, these are the useful ones:
+## Environment Variables
+
+In the default repository layout, the packaged CLI can find the bundled CONTAM executables automatically.
+
+If you want to point the server at another CONTAM installation, these variables are useful:
 
 - `CONTAM_HOME`
 - `CONTAMX_PATH`
@@ -105,6 +163,7 @@ If your host supports environment variables, these are the useful ones:
 - This repository is Windows-first because it bundles Windows CONTAM executables.
 - The server does not depend on Codex-specific APIs.
 - Hosts that do not support MCP, or cannot launch local `stdio` processes, will need an adapter layer before they can use this server.
+- If this project is later published to npm, the command can become even shorter, for example `npx -y contam-mcp`.
 
 ## References
 

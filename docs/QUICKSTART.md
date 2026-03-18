@@ -1,36 +1,23 @@
 # Five-Minute Quickstart
 
-This tutorial gets `CONTAM MCP` running with a local MCP host and walks through a minimal first session.
+This tutorial gets `CONTAM MCP` running in an MCP host with the recommended `npx` setup.
 
-## 1. Install the Node dependencies
-
-```powershell
-cd contam-mcp
-npm install
-```
-
-## 2. Optional: run the privacy check
-
-```powershell
-npm run privacy:check
-```
-
-## 3. Connect the server to your MCP host
+## 1. Configure the MCP host
 
 Use:
 
 ```text
-command: node
-args: <repo-root>\contam-mcp\src\server.js
+command: npx
+args: -y --package github:summer521521/contam_MCP contam-mcp
 ```
 
 If you need host-specific examples, see `docs/HOSTS.md`.
 
-## 4. Restart the MCP host
+## 2. Restart the host
 
 After the host reloads its MCP configuration, open a new session.
 
-## 5. Try a minimal workflow
+## 3. Try a minimal workflow
 
 Start with installation discovery:
 
@@ -38,34 +25,34 @@ Start with installation discovery:
 Call discover_contam_installation and confirm CONTAM is available.
 ```
 
-List example project files:
+List case files:
 
 ```text
-List CONTAM case files under tmp/nist-cases.
+List CONTAM case files in this folder.
 ```
 
-Inspect one project:
+Inspect a project:
 
 ```text
-Inspect tmp/nist-cases/cottage/cottage-dcv.prj and summarize its references and date range.
+Inspect this PRJ file and summarize its references and date range.
 ```
 
 Run a fast validation:
 
 ```text
-Run a test input only check for tmp/nist-cases/cottage/cottage-dcv.prj.
+Run a test input only check for this PRJ.
 ```
 
 Run the project:
 
 ```text
-Run tmp/nist-cases/cottage/cottage-dcv.prj and list the generated outputs.
+Run this PRJ and list the generated outputs.
 ```
 
 Start bridge mode:
 
 ```text
-Start a CONTAM bridge session for tmp/nist-cases/cottage/cottage-dcv.prj.
+Start a CONTAM bridge session for this project.
 ```
 
 List zones:
@@ -86,17 +73,17 @@ Close the session:
 Close the active bridge session.
 ```
 
-## 6. Run the official regression suite
+## Optional: Local Clone Mode
 
-If you want to verify the full repository setup:
+If you prefer not to launch from GitHub each time, you can still clone the repository and point the MCP host directly at:
 
-```powershell
-npm run regression:official
+```text
+node <repo-root>\contam-mcp\src\server.js
 ```
 
 ## Common First Problems
 
-- `node` not found: install Node.js and confirm `node --version` works.
-- MCP host cannot start the server: check the path to `src/server.js`.
-- CONTAM executables not found: keep the default repository layout or set the explicit CONTAM environment variables.
+- `npx` not found: install Node.js and confirm `npx --version` works.
+- MCP host cannot start the server: verify that the host supports local `stdio` MCP servers.
+- CONTAM executables not found: keep the default packaged layout or set the explicit CONTAM environment variables.
 - A project fails before simulation: run `test input only` or use `diagnose_contam_project` first.

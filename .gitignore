@@ -1,6 +1,7 @@
 tmp/
 *.log
 *.xlog
+node_modules/
 contam-mcp/node_modules/
 contam-mcp/tmp/
 contam-mcp/tmp-docs/
