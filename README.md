@@ -93,6 +93,7 @@ GitHub Actions also runs this check automatically.
 
 - [NIST CONTAM Download Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/download-contam)
 - [NIST CONTAM Documentation Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/contam-documentation)
+- [Dols, Shen, Polidoro, et al. "Development and Application of CONTAM APIs" (Building Simulation, 2026)](https://doi.org/10.1007/s12273-025-1376-x)
 - [CONTAM User Guide and Program Documentation Version 3.4 (NIST TN 1887r1)](https://doi.org/10.6028/NIST.TN.1887r1)
 - [Host Setup Guide](docs/HOSTS.md)
 

@@ -365,3 +365,9 @@ If you want to extend the server, the next high-value areas are:
 2. reusable `simread` export templates
 3. finer-grained `.prj` editing tools
 4. project packaging and transfer utilities
+
+## References
+
+- [NIST CONTAM Documentation Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/contam-documentation)
+- [Dols, Shen, Polidoro, et al. "Development and Application of CONTAM APIs" (Building Simulation, 2026)](https://doi.org/10.1007/s12273-025-1376-x)
+- [CONTAM User Guide and Program Documentation Version 3.4 (NIST TN 1887r1)](https://doi.org/10.6028/NIST.TN.1887r1)
