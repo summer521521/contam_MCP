@@ -2,7 +2,7 @@
 
 This document is for maintainers and contributors.
 
-If you only want to install and use the project, start with the repository root `README.md`. This file focuses on server internals, regression coverage, CI behavior, and the current tool surface.
+If you only want to install and use the project, start with the [repository root README](../README.md). For host-specific setup, see the [Host Setup Guide](../docs/HOSTS.md). For a short first-run tutorial, see the [Five-Minute Quickstart](../docs/QUICKSTART.md). This file focuses on server internals, regression coverage, CI behavior, and the current tool surface.
 
 ## Overview
 

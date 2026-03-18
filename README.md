@@ -1,28 +1,37 @@
 # CONTAM MCP
 
-`CONTAM MCP` is a Windows-focused MCP server that exposes CONTAM command-line tools and ContamX bridge-mode controls to AI agents.
+`CONTAM MCP` is a Windows-first MCP server that exposes CONTAM command-line tools and ContamX bridge-mode controls to AI agents.
 
-This project is built for public use. It is not a private Codex helper or a local-only experiment. The goal is to make CONTAM operations accessible through a standard MCP tool surface so an agent can inspect projects, run simulations, diagnose broken cases, and drive bridge sessions.
+The project is designed for public use. It packages stable CONTAM automation workflows behind a standard MCP tool surface so an agent can inspect projects, diagnose broken inputs, run simulations, compare outputs, and drive bridge sessions over time.
 
-## Compatibility
+## Why This Project Exists
 
-This server is not limited to Codex.
+CONTAM is powerful, but most automation workflows still start from desktop usage patterns or manual case handling. This repository turns the practical parts of the CONTAM toolchain into an MCP server so agents can:
 
-It should work with any MCP host or agent runtime that can:
+- inspect `.prj` models before running them
+- catch missing weather or support-file references
+- run `contamx3.exe` and collect outputs
+- compare `.sim` files
+- export `simread` text
+- control ContamX bridge-mode sessions step by step
 
-- launch a local `stdio` MCP server
-- run `node`
-- call MCP tools
+## Host Compatibility
 
-Codex Desktop / Codex Windows App is one supported host. Other MCP-capable agent shells or desktop clients can also use this server if they support local `stdio` servers.
+This server is not Codex-only.
 
-The server entry point is:
+Any host that can launch a local `stdio` MCP server should be able to use it. Confirmed target hosts documented in this repository include:
 
-```text
-<repo-root>\contam-mcp\src\server.js
-```
+- Codex Desktop / Codex Windows App
+- Claude Code
+- Claude Desktop
+- Cursor
+- other MCP-capable local hosts
 
-## What It Can Do
+Host-specific setup examples are in:
+
+- [Host Setup Guide](docs/HOSTS.md)
+
+## Main Capabilities
 
 - discover bundled CONTAM executables
 - find `.prj`, `.sim`, `.wth`, `.ctm`, and related files
@@ -39,41 +48,16 @@ The server entry point is:
 ## Five-Minute Quickstart
 
 1. Clone or download this repository on Windows.
+2. Install dependencies in `contam-mcp`.
+3. Point your MCP host to `node <repo-root>\contam-mcp\src\server.js`.
+4. Restart the host.
+5. Ask the host to inspect or run a sample `.prj`.
 
-2. Install the Node dependencies.
+For the full step-by-step tutorial, see:
 
-```powershell
-cd contam-mcp
-npm install
-```
+- [Five-Minute Quickstart](docs/QUICKSTART.md)
 
-3. Optionally run the repository privacy check before you publish or share changes.
-
-```powershell
-npm run privacy:check
-```
-
-4. Point your MCP host at the server entry point.
-
-For Codex, add this to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.contam]
-command = "node"
-args = ["<repo-root>\\contam-mcp\\src\\server.js"]
-tool_timeout_sec = 300
-```
-
-For other MCP hosts, use the same command and argument pair:
-
-```text
-command: node
-args: <repo-root>\contam-mcp\src\server.js
-```
-
-5. Restart your MCP host or agent app.
-
-6. Try one of these prompts:
+## Example Prompts
 
 - `Call discover_contam_installation and confirm CONTAM is available.`
 - `List CONTAM case files in this folder.`
@@ -87,7 +71,8 @@ args: <repo-root>\contam-mcp\src\server.js
 
 ## Repository Layout
 
-- `contam-mcp/`: server source, developer guide, and regression scripts
+- `contam-mcp/`: MCP server source, developer guide, and regression scripts
+- `docs/`: public quickstart and host setup guides
 - `.github/workflows/`: GitHub Actions workflows
 - repository root: bundled CONTAM executables and supporting DLLs
 
@@ -104,8 +89,8 @@ npm run privacy:check
 
 GitHub Actions also runs this check automatically.
 
-## Developer Documentation
+## For Maintainers
 
-If you want to extend the server, review the bridge protocol coverage, or run the official regression suite, see:
+If you want to extend the server, review bridge protocol coverage, or run the official regression suite, start here:
 
-- `contam-mcp/README.md`
+- [Developer Guide](contam-mcp/README.md)
