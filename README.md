@@ -89,6 +89,13 @@ npm run privacy:check
 
 GitHub Actions also runs this check automatically.
 
+## References
+
+- [NIST CONTAM Download Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/download-contam)
+- [NIST CONTAM Documentation Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/contam-documentation)
+- [CONTAM User Guide and Program Documentation Version 3.4 (NIST TN 1887r1)](https://doi.org/10.6028/NIST.TN.1887r1)
+- [Host Setup Guide](docs/HOSTS.md)
+
 ## For Maintainers
 
 If you want to extend the server, review bridge protocol coverage, or run the official regression suite, start here:

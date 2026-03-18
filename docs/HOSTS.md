@@ -105,3 +105,8 @@ If your host supports environment variables, these are the useful ones:
 - This repository is Windows-first because it bundles Windows CONTAM executables.
 - The server does not depend on Codex-specific APIs.
 - Hosts that do not support MCP, or cannot launch local `stdio` processes, will need an adapter layer before they can use this server.
+
+## References
+
+- [Anthropic Claude Code MCP Documentation](https://code.claude.com/docs/en/mcp)
+- [Cursor MCP Documentation](https://docs.cursor.com/en/advanced/model-context-protocol)
