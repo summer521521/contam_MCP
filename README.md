@@ -32,6 +32,7 @@ Any host that can launch a local `stdio` MCP server should be able to use it. Co
 Host-specific setup examples are in:
 
 - [Host Setup Guide](docs/HOSTS.md)
+- [Codex Windows App Setup](docs/CODEX_WINDOWS_APP.md)
 
 ## Easiest Connection Option
 

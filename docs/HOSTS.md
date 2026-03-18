@@ -37,6 +37,8 @@ args = ["-y", "--package", "github:summer521521/contam_MCP", "contam-mcp"]
 tool_timeout_sec = 300
 ```
 
+For a UI-oriented walkthrough, see [Codex Windows App Setup](CODEX_WINDOWS_APP.md).
+
 If you prefer a local clone, use:
 
 ```toml
