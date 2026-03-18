@@ -8,6 +8,8 @@ If you only want to install and use the project, start with the [repository root
 
 This directory contains a local `stdio` MCP server that wraps the CONTAM executables bundled in the repository root.
 
+Its implementation direction is aligned with the broader CONTAM API effort described by Dols, Shen, Polidoro, and coauthors, but this repository specifically packages a practical local MCP server around the currently usable CONTAM CLI and ContamX bridge surfaces.
+
 The current server exposes stable, automation-friendly operations:
 
 - `discover_contam_installation`

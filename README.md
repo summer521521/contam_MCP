@@ -4,6 +4,8 @@
 
 The project is designed for public use. It packages stable CONTAM automation workflows behind a standard MCP tool surface so an agent can inspect projects, diagnose broken inputs, run simulations, compare outputs, and drive bridge sessions over time.
 
+The design is informed by the CONTAM API direction described in the Building Simulation paper "Development and Application of CONTAM APIs" and by the official ContamX documentation and bridge protocol materials from NIST.
+
 ## Why This Project Exists
 
 CONTAM is powerful, but most automation workflows still start from desktop usage patterns or manual case handling. This repository turns the practical parts of the CONTAM toolchain into an MCP server so agents can:
