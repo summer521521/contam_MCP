@@ -1,34 +1,61 @@
 # CONTAM MCP
 
-一个面向 Windows 的 MCP server，让 Codex Desktop / Codex Windows App 可以直接调用 CONTAM。
+`CONTAM MCP` is a Windows-focused MCP server that exposes CONTAM command-line tools and ContamX bridge-mode controls to AI agents.
 
-这个仓库的目标不是自动点 `contamw3.exe` 的界面，而是把更稳定、可自动化的 CONTAM 能力封装成 MCP 工具，包括：
+This project is built for public use. It is not a private Codex helper or a local-only experiment. The goal is to make CONTAM operations accessible through a standard MCP tool surface so an agent can inspect projects, run simulations, diagnose broken cases, and drive bridge sessions.
 
-- 查找 CONTAM 安装和案例文件
-- 检查、诊断、修复 `.prj` 引用
-- 运行 `contamx3.exe` 模拟
-- 升级旧版项目
-- 比较 `.sim` 结果
-- 导出 `simread` 文本结果
-- 启动 ContamX bridge session，按时间步推进并调整 zone、junction、ambient、AHS、control node 等对象
+## Compatibility
 
-## 适合谁
+This server is not limited to Codex.
 
-- 想在 Codex 里直接操作 CONTAM 的研究者
-- 想批量跑案例、做参数扫描、做自动化联调的使用者
-- 想把 CONTAM 接入 AI 工作流或 MCP 工具链的开发者
+It should work with any MCP host or agent runtime that can:
 
-## 快速开始
+- launch a local `stdio` MCP server
+- run `node`
+- call MCP tools
 
-1. 克隆或下载这个仓库
-2. 进入 `contam-mcp` 目录并安装依赖
+Codex Desktop / Codex Windows App is one supported host. Other MCP-capable agent shells or desktop clients can also use this server if they support local `stdio` servers.
+
+The server entry point is:
+
+```text
+<repo-root>\contam-mcp\src\server.js
+```
+
+## What It Can Do
+
+- discover bundled CONTAM executables
+- find `.prj`, `.sim`, `.wth`, `.ctm`, and related files
+- inspect project metadata and external file references
+- diagnose broken project references
+- update `.prj` file references
+- run `contamx3.exe`
+- upgrade old `.prj` files with `prjup.exe`
+- compare `.sim` files with `simcomp.exe`
+- export `simread` text output
+- start, inspect, advance, and close ContamX bridge sessions
+- adjust zones, junctions, ambient targets, AHS settings, and control nodes by ID or by name
+
+## Five-Minute Quickstart
+
+1. Clone or download this repository on Windows.
+
+2. Install the Node dependencies.
 
 ```powershell
 cd contam-mcp
 npm install
 ```
 
-3. 把下面这段加到 Codex 配置文件 `~/.codex/config.toml`
+3. Optionally run the repository privacy check before you publish or share changes.
+
+```powershell
+npm run privacy:check
+```
+
+4. Point your MCP host at the server entry point.
+
+For Codex, add this to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.contam]
@@ -37,41 +64,48 @@ args = ["<repo-root>\\contam-mcp\\src\\server.js"]
 tool_timeout_sec = 300
 ```
 
-4. 重启 Codex Desktop / Codex Windows App
+For other MCP hosts, use the same command and argument pair:
 
-## 上手示例
+```text
+command: node
+args: <repo-root>\contam-mcp\src\server.js
+```
 
-把 server 接好后，可以直接在 Codex 里说这些话：
+5. Restart your MCP host or agent app.
 
-- `调用 discover_contam_installation，看一下 CONTAM 有没有接好`
-- `列出当前目录里的 CONTAM 案例文件`
-- `检查这个 prj 的项目结构`
-- `对这个 prj 做 test input only 检查`
-- `运行这个 prj`
-- `启动一个 CONTAM bridge session`
-- `列出这个 session 里的 zones`
-- `把这个 session 推进 300 秒，并返回 path flow updates`
-- `关闭这个 bridge session`
+6. Try one of these prompts:
 
-## 仓库结构
+- `Call discover_contam_installation and confirm CONTAM is available.`
+- `List CONTAM case files in this folder.`
+- `Inspect this PRJ file and summarize its references and date range.`
+- `Run a test input only check for this PRJ.`
+- `Run this PRJ and list the generated outputs.`
+- `Start a CONTAM bridge session for this project.`
+- `List the zones in the active bridge session.`
+- `Advance the active bridge session by 300 seconds and return path flow updates.`
+- `Close the active bridge session.`
 
-- `contam-mcp/`: MCP server 源码、开发文档和回归脚本
-- `.github/workflows/`: GitHub Actions
-- 仓库根目录：CONTAM 可执行文件和依赖 DLL
+## Repository Layout
 
-## 隐私与公开仓库
+- `contam-mcp/`: server source, developer guide, and regression scripts
+- `.github/workflows/`: GitHub Actions workflows
+- repository root: bundled CONTAM executables and supporting DLLs
 
-这个仓库带了隐私检查脚本，公开推送前可以先运行：
+## Privacy and CI
+
+This repository includes a privacy check that scans tracked files for personal filesystem paths before public sharing.
+
+Run it locally with:
 
 ```powershell
 cd contam-mcp
 npm run privacy:check
 ```
 
-GitHub Actions 也会自动执行这一步，用来拦截误提交的本机绝对路径和用户目录信息。
+GitHub Actions also runs this check automatically.
 
-## 开发与维护
+## Developer Documentation
 
-如果你是要修改 server、跑官方回归、看 bridge 协议细节或维护 CI，请看：
+If you want to extend the server, review the bridge protocol coverage, or run the official regression suite, see:
 
 - `contam-mcp/README.md`

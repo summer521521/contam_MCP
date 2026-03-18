@@ -43,10 +43,7 @@ const OUTDOOR_ZONE_ALIASES = new Set([
   "outdoors",
   "outside",
   "ambient",
-  "exterior",
-  "室外",
-  "室外空气",
-  "室外环境"
+  "exterior"
 ]);
 
 const projectReferenceDescriptors = [

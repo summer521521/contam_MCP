@@ -1,12 +1,14 @@
 # CONTAM MCP Developer Guide
 
-这个 README 面向维护者和开发者。
+This document is for maintainers and contributors.
 
-如果只是想安装和使用这个项目，请先看仓库根目录的 `README.md`。本文件主要记录 server 实现、回归测试、CI 和开发细节。
+If you only want to install and use the project, start with the repository root `README.md`. This file focuses on server internals, regression coverage, CI behavior, and the current tool surface.
 
-这个目录提供一个本地 `stdio` MCP server，用来把仓库根目录里的 CONTAM 命令行工具封装给 Codex Desktop / Codex Windows App 调用。
+## Overview
 
-目前封装的是稳定、可自动化的 CLI 能力：
+This directory contains a local `stdio` MCP server that wraps the CONTAM executables bundled in the repository root.
+
+The current server exposes stable, automation-friendly operations:
 
 - `discover_contam_installation`
 - `list_contam_case_files`
@@ -24,112 +26,112 @@
 - `compare_contam_sim_results`
 - `export_contam_sim_text`
 
-## 设计取舍
+## Design Choices
 
-这个版本优先封装 `ContamX`、`prjup`、`simcomp`、`simread`，而不是去自动点 `contamw3.exe` 的 GUI。
+This server targets `ContamX`, `prjup`, `simcomp`, and `simread` rather than GUI automation for `contamw3.exe`.
 
-原因很直接：
+That tradeoff is intentional:
 
-- GUI 自动化很脆弱。
-- `contamx3.exe` 和相关工具已经有明确的命令行入口。
-- Codex 通过 MCP 调这些命令，比操作窗口更稳定、更容易复现。
+- GUI automation is brittle.
+- `contamx3.exe` and the related utilities already have stable command-line entry points.
+- MCP calls to CLI tools are easier to reproduce, test, and debug than window-level automation.
 
-## 安装
+The implementation is not Codex-specific. It is a standard `stdio` MCP server built on `@modelcontextprotocol/sdk`, so any MCP host that can launch a local Node process should be able to use it.
 
-在这个目录里执行：
+## Install
+
+Run this inside `contam-mcp`:
 
 ```powershell
 npm install
 ```
 
-## 启动测试
+## Local Server Run
 
 ```powershell
 node .\src\server.js
 ```
 
-如果进程正常启动，它会进入 MCP 的 `stdio` 等待状态，不会打印交互菜单。
+If startup succeeds, the process will wait for MCP traffic on `stdio`. It will not print an interactive menu.
 
-## 回归测试
+## Regression Suite
 
-已经内置一个基于 NIST 官方 `cottage-dcv.prj` 的真实案例回归脚本：
+The repository includes two real NIST regression cases:
 
 ```powershell
 npm run regression:cottage
-```
-
-还提供一个更大的 `MediumOffice.prj` 真实案例回归：
-
-```powershell
 npm run regression:medium-office
 ```
 
-如果你想把两套官方回归一起跑：
+Run both together with:
 
 ```powershell
 npm run regression:official
 ```
 
-在公开推送前，建议先跑一遍仓库隐私检查：
+The repository also includes a privacy check:
 
 ```powershell
 npm run privacy:check
 ```
 
-它会扫描所有已跟踪文件，检查是否误提交了本机家目录、桌面目录或其他个人文件系统路径。GitHub Actions 也会自动执行这一步。
+It scans tracked files for personal filesystem paths before public publication. GitHub Actions runs this check automatically.
 
-仓库根目录还带了一个 Windows GitHub Actions workflow：
+## CI Workflow
+
+The root workflow is:
 
 - `.github/workflows/contam-mcp-regression.yml`
 
-它会在 CI 里自动：
+It currently does the following on Windows:
 
-- 校验 CONTAM 可执行文件是否存在
-- 安装 `contam-mcp` 依赖
-- 从 NIST 下载 `cottage-dcv` 和 `MediumOffice` 官方案例
-- 运行 `npm run regression:official`
-- 上传 `tmp/ci-artifacts`，包含每个案例的日志和 JSON 摘要
+- verifies that the bundled CONTAM binaries exist
+- installs `contam-mcp` dependencies
+- runs the repository privacy check
+- downloads the official NIST `cottage-dcv` and `MediumOffice` regression cases
+- runs `npm run regression:official`
+- uploads `tmp/ci-artifacts` with logs and JSON summaries
 
-如果你按仓库默认结构运行，官方回归会使用这些相对路径：
+With the default repository layout, the official regressions use these relative paths:
 
 - `tmp/nist-cases/cottage/cottage-dcv.prj`
 - `tmp/nist-cases/medium-office/MediumOffice.prj`
 
-它会验证这些链路：
+The regressions verify these paths through the system:
 
-- bridge 会话能正常启动
-- `junctions` 和 `ambientTargets` 元数据非空
-- `namedJunctionTemperatureAdjustments` 可作用在真实 duct terminal / junction 上
-- `namedAmbientPressureAdjustment` 可作用在真实 ambient terminal / envelope target 上
-- `namedAmbientConcentrationAdjustments` 可作用在真实 ambient target + contaminant 组合上
-- 推进后能收到 `PATH_FLOW_UPDATE` / `TERM_FLOW_UPDATE`
+- bridge sessions start successfully
+- `junctions` and `ambientTargets` metadata are populated
+- `namedJunctionTemperatureAdjustments` works on real duct terminals and junctions
+- `namedAmbientPressureAdjustment` works on real ambient terminal and envelope targets
+- `namedAmbientConcentrationAdjustments` works on real ambient target plus contaminant combinations
+- advancing a session yields `PATH_FLOW_UPDATE` and `TERM_FLOW_UPDATE` responses
 
-`MediumOffice` 回归额外会覆盖：
+The `MediumOffice` regression adds coverage for:
 
-- 多个 input / output control node
-- 多个 AHS 名称解析
-- 更大的多区、多污染物模型
+- multiple input and output control nodes
+- multiple AHS names
+- a larger multi-zone, multi-contaminant model
 
-## 在 Codex Desktop 里接入
+## Codex Configuration Example
 
-把下面这段加到你的 Codex 配置文件 `~/.codex/config.toml`：
+Add this to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.contam]
 command = "node"
-args = ["<仓库绝对路径>\\contam-mcp\\src\\server.js"]
+args = ["<repo-root>\\contam-mcp\\src\\server.js"]
 tool_timeout_sec = 300
 ```
 
-然后重启 Codex Desktop。
+Restart Codex after updating the config.
 
-因为这个 server 默认会在以下位置找 CONTAM 可执行文件，所以你现在这个目录结构不用额外配环境变量：
+The server looks for CONTAM executables in:
 
 - `CONTAM_HOME`
-- server 所在目录的上一级
-- 当前工作目录
+- the parent directory of the server location
+- the current working directory
 
-如果你以后把 MCP server 挪到别处，可以再设置这些环境变量之一：
+If you move the server elsewhere, these optional variables can be set explicitly:
 
 - `CONTAM_HOME`
 - `CONTAMX_PATH`
@@ -138,42 +140,42 @@ tool_timeout_sec = 300
 - `SIMREAD_PATH`
 - `SIMCOMP_PATH`
 
-## 工具说明
+## Tool Reference
 
 ### `discover_contam_installation`
 
-确认 MCP server 当前能找到哪些 CONTAM 可执行文件，以及 `contamx3.exe` / `prjup.exe` 的版本号。
+Resolves the CONTAM executable paths that the server can currently see, plus version information for `contamx3.exe` and `prjup.exe` when available.
 
 ### `list_contam_case_files`
 
-扫描目录树，列出 `.prj`、`.sim`、`.wth`、`.ctm` 等常见 CONTAM 文件。
+Scans a directory tree and lists common CONTAM file types such as `.prj`, `.sim`, `.wth`, and `.ctm`.
 
 ### `get_contam_program_help`
 
-读取某个 CONTAM CLI 程序的内置帮助文本，适合先让模型理解官方参数说明。
+Reads the built-in help text for a CONTAM CLI program.
 
 ### `inspect_contam_project`
 
-解析 `.prj` 的基础结构，返回：
+Parses a `.prj` file and returns:
 
-- 格式头
-- 标题
-- 日期范围
-- 关键 section 数量
-- 引用的 weather / contaminant / WPC / EWC 等文件
+- format header
+- project title
+- simulation date range
+- selected section counts
+- referenced weather, contaminant, WPC, and EWC files
 
 ### `diagnose_contam_project`
 
-当项目跑不起来时，先用它检查：
+Checks why a project fails to run by reporting:
 
-- `.prj` 里实际配置了哪些依赖文件
-- 这些文件在工作目录或项目目录里是否存在
-- 如果不存在，项目目录附近有没有同名候选文件
-- 可直接写回 `.prj` 的建议相对路径
+- which dependencies are referenced in the `.prj`
+- whether those files exist in the project or working directory
+- nearby candidate matches if a dependency is missing
+- suggested relative paths that can be written back into the `.prj`
 
 ### `update_contam_project_references`
 
-直接修改 `.prj` 里这些引用：
+Updates these `.prj` references directly:
 
 - `weatherFile`
 - `contaminantFile`
@@ -182,49 +184,49 @@ tool_timeout_sec = 300
 - `wpcFile`
 - `ewcFile`
 
-默认会在原文件旁边生成一个 `.mcp.bak` 备份。
+By default it writes a `.mcp.bak` backup next to the original project.
 
 ### `run_contam_simulation`
 
-运行 `contamx3.exe`。支持：
+Runs `contamx3.exe` and supports:
 
-- 普通运行
-- `-t` 输入校验
-- 自定义 `workingDirectory`
+- normal simulation runs
+- test-input-only runs
+- custom `workingDirectory`
 - bridge address
 - bridge wind
 - bridge volume flow
 
-工具会返回：
+The tool returns:
 
-- 实际执行参数
-- 退出码
-- stdout / stderr
-- 项目目录里的文件变化
-- 与该项目同名的产物文件列表
+- effective command-line arguments
+- exit code
+- `stdout` and `stderr`
+- file changes in the project directory
+- output files that match the project basename
 
 ### `start_contam_bridge_session`
 
-启动一个持久的 ContamX bridge-mode 会话。会返回：
+Starts a persistent ContamX bridge-mode session and returns:
 
 - `sessionId`
-- 初始 `readyTimeSeconds`
-- 项目元数据
-- 初始握手阶段收到的消息类型
+- initial `readyTimeSeconds`
+- project metadata
+- message types received during the startup handshake
 
 ### `get_contam_bridge_session`
 
-读取某个活动 bridge 会话的当前状态，包括：
+Reads the current state of an active bridge session, including:
 
-- 项目路径
-- 当前 ready 时间
-- zone / path / AHS 等元数据
-- `ambientTargets` 顺序
-- 上一次 advance 的结果
+- project path
+- current ready time
+- zone, path, AHS, and related metadata
+- `ambientTargets` ordering
+- the last advance result
 
 ### `list_contam_bridge_entities`
 
-返回 bridge 会话里一份更短、更适合模型消费的实体清单。可列出：
+Returns a shorter entity list for agent consumption. Supported categories include:
 
 - `zones`
 - `paths`
@@ -235,24 +237,25 @@ tool_timeout_sec = 300
 - `ahsSystems`
 - `ambientTargets`
 
-其中 `ambientTargets` 现在会同时给出：
+`ambientTargets` include both:
 
-- `label`: 可读标签
-- `selectorLabel`: 带 ambient index 的唯一选择器，适合直接回填给 MCP
+- `label`: a readable label
+- `selectorLabel`: a unique selector that includes the ambient index
 
-`paths` 也会带：
+`paths` include both:
 
-- `label`: 可读标签，可能重复
-- `selectorLabel`: 带 path id 和 element name 的唯一选择器，适合解决 `Outdoor -> attic` 这种多条路径歧义
+- `label`: a readable label that may repeat
+- `selectorLabel`: a unique selector that includes the path ID and element name
 
 ### `advance_contam_bridge_session`
 
-对 bridge 会话做两类事：
+This tool can:
 
-- 先发控制节点或天气修正
-- 再把 ContamX 推进到指定仿真时刻，并请求 update 消息
+- send control or weather adjustments
+- advance ContamX to a target time
+- request update messages
 
-当前已支持这些调整消息：
+Currently supported adjustment inputs:
 
 - `controlNodeAdjustments`
 - `namedControlNodeAdjustments`
@@ -274,34 +277,33 @@ tool_timeout_sec = 300
 - `ahsPoaAdjustments`
 - `namedAhsPoaAdjustments`
 
-其中这些名字解析已经可用：
+Name-based lookup currently supports:
 
-- zone: 通过 `zoneName`
-- junction: 通过 bridge 生成的 `Junction 1` / `Terminal 2` 这类标签
-- input control node: 通过 `controlNodeName`
-- airflow element: 通过 `elementName`
-- AHS: 通过 `ahsName`
-- path: 通过 `fromZoneName` + `toZoneName` 选择
-- path: 也可以直接用 `pathSelectorLabel`
+- zones via `zoneName`
+- junctions via generated labels such as `Junction 1` and `Terminal 2`
+- input control nodes via `controlNodeName`
+- airflow elements via `elementName`
+- AHS systems via `ahsName`
+- paths via `fromZoneName` and `toZoneName`
+- paths via `pathSelectorLabel`
 
-名字解析规则现在是：
+Name resolution rules are:
 
-- 先做规范化后的精确匹配
-- 再尝试唯一的子串匹配
-- 如果仍有多个候选，就直接报歧义并列出匹配项
+- normalized exact match first
+- then unique substring match
+- otherwise an ambiguity error with candidates
 
-对 path 选择器，`fromZoneName` / `toZoneName` 还支持这些室外别名：
+For path selection, `fromZoneName` and `toZoneName` also accept these outdoor aliases:
 
 - `Outdoor`
 - `outside`
 - `ambient`
-- `室外`
 
-对 `ambientTargets`，推荐优先使用 `selectorLabel`，因为像 `Outdoor -> Attic` 这种标签可能会重复；`Ambient 1: Outdoor -> Attic` 这种选择器才是唯一的。
+For `ambientTargets`, prefer `selectorLabel` because labels such as `Outdoor -> Attic` may repeat while `Ambient 1: Outdoor -> Attic` is unique.
 
-对 ambient concentration，当前高层接口按“一条消息对应一个 contaminant”来组织。也就是说，如果你要给多个污染物发不同的室外边界浓度，建议传 `namedAmbientConcentrationAdjustments` 数组，每个对象指定一个 `agentName` 或 `agentId`。
+For ambient concentration writes, the high-level interface is organized as one message per contaminant. If multiple contaminants need different ambient boundary values, send a `namedAmbientConcentrationAdjustments` array with one object per `agentName` or `agentId`.
 
-也就是说，现在可以直接用类似这些输入：
+Representative inputs:
 
 - `namedZoneTemperatureAdjustments: { zoneNames: ["Kitchen"], values: [295.15] }`
 - `namedJunctionTemperatureAdjustments: { junctionNames: ["Terminal 2"], values: [294.15] }`
@@ -311,7 +313,7 @@ tool_timeout_sec = 300
 - `namedElementAdjustments: [{ fromZoneName: "LivingDining", toZoneName: "Kitchen", elementName: "WallInt" }]`
 - `namedAhsPoaAdjustments: { names: ["main"], values: [0.25] }`
 
-当前支持请求这些更新：
+Currently supported update requests include:
 
 - concentration updates
 - path flow updates
@@ -322,43 +324,44 @@ tool_timeout_sec = 300
 
 ### `close_contam_bridge_session`
 
-关闭 bridge 会话，释放 ContamX 进程和本地 socket。
+Closes the bridge session and releases the ContamX process plus local socket.
 
 ### `upgrade_contam_project`
 
-运行 `prjup.exe` 升级旧版 `.prj`。
+Runs `prjup.exe` to upgrade older `.prj` files.
 
 ### `compare_contam_sim_results`
 
-运行 `simcomp.exe` 比较两个 `.sim` 文件。
+Runs `simcomp.exe` to compare two `.sim` files.
 
 ### `export_contam_sim_text`
 
-运行 `simread.exe`，把 `.sim` 导出为文本结果。
+Runs `simread.exe` and exports a `.sim` file to text.
 
-注意：`simread` 原生是交互式程序，所以 MCP 调用时必须提供：
+`simread` is interactive by default, so MCP callers must provide either:
 
 - `responsesText`
-- 或 `responsesFilePath`
+- `responsesFilePath`
 
-也就是说，你要先准备好一段响应脚本，等价于：
+Equivalent CLI pattern:
 
 ```powershell
 simread mycase.sim < responses.txt
 ```
 
-## 当前限制
+## Current Limitations
 
-- 还没有做 `contamw3.exe` GUI 建模自动化。
-- `simread` 的“响应脚本”格式依然依赖 CONTAM 自身的交互提示。
-- bridge mode 仍未覆盖全部细分耦合消息；目前已支持 `ADJ_JCT_TEMP`，但 junction 本身没有来自 ContamW 的原生名字，所以名称控制依赖 `Junction N` / `Terminal N` 这种生成标签。
-- bridge 元数据目前更偏工程可用，不是完整逐字段镜像官方协议。
+- `contamw3.exe` GUI automation is not implemented.
+- `simread` response scripts still depend on CONTAM's own prompt flow.
+- bridge mode does not yet cover every possible coupling message
+- junctions do not carry original ContamW names, so junction control currently uses generated labels such as `Junction N` and `Terminal N`
+- bridge metadata is optimized for practical use, not for a complete field-by-field mirror of the official protocol
 
-## 后续建议
+## Good Next Steps
 
-如果你想把这个 server 继续做强，下一步最值得补的是：
+If you want to extend the server, the next high-value areas are:
 
-1. bridge mode 下更多修改消息
-2. 常见 `simread` 导出模板
-3. 更细粒度的项目文件编辑工具
-4. 项目打包/搬运工具
+1. more bridge-mode adjustment messages
+2. reusable `simread` export templates
+3. finer-grained `.prj` editing tools
+4. project packaging and transfer utilities
