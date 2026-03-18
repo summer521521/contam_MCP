@@ -1,0 +1,102 @@
+name: CONTAM MCP Regression
+
+on:
+  push:
+    paths:
+      - ".github/workflows/contam-mcp-regression.yml"
+      - "contam-mcp/**"
+      - "contamx3.exe"
+      - "contamw3.exe"
+      - "prjup.exe"
+      - "simcomp.exe"
+      - "simread.exe"
+      - "olch2d32.dll"
+  pull_request:
+    paths:
+      - ".github/workflows/contam-mcp-regression.yml"
+      - "contam-mcp/**"
+      - "contamx3.exe"
+      - "contamw3.exe"
+      - "prjup.exe"
+      - "simcomp.exe"
+      - "simread.exe"
+      - "olch2d32.dll"
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: contam-mcp/package-lock.json
+
+      - name: Verify CONTAM binaries
+        run: |
+          $required = @(
+            "contamx3.exe",
+            "contamw3.exe",
+            "prjup.exe",
+            "simcomp.exe",
+            "simread.exe",
+            "olch2d32.dll"
+          )
+          foreach ($item in $required) {
+            if (-not (Test-Path $item)) {
+              throw "Missing required file: $item"
+            }
+          }
+
+      - name: Install MCP dependencies
+        working-directory: contam-mcp
+        run: npm ci
+
+      - name: Download official NIST regression cases
+        run: |
+          New-Item -ItemType Directory -Force .\tmp\nist-cases | Out-Null
+          New-Item -ItemType Directory -Force .\tmp\ci-artifacts | Out-Null
+          Invoke-WebRequest -Uri "https://www.nist.gov/document/cottage-dcv-t18-cx34-t9834zip" -OutFile ".\tmp\nist-cases\cottage-dcv-t18-cx34-t9834.zip"
+          Invoke-WebRequest -Uri "https://www.nist.gov/document/medium-office-dcv-t18-cx34-t9834zip" -OutFile ".\tmp\nist-cases\medium-office-dcv-t18-cx34-t9834.zip"
+          Expand-Archive -LiteralPath ".\tmp\nist-cases\cottage-dcv-t18-cx34-t9834.zip" -DestinationPath ".\tmp\nist-cases\cottage" -Force
+          Expand-Archive -LiteralPath ".\tmp\nist-cases\medium-office-dcv-t18-cx34-t9834.zip" -DestinationPath ".\tmp\nist-cases\medium-office" -Force
+
+      - name: Run official regressions
+        working-directory: contam-mcp
+        run: |
+          $artifactDir = (Resolve-Path "..\tmp\ci-artifacts").Path
+          $failed = $false
+
+          $env:CONTAM_REGRESSION_REPORT_PATH = Join-Path $artifactDir "cottage-summary.json"
+          npm run regression:cottage 2>&1 | Tee-Object -FilePath (Join-Path $artifactDir "cottage.log")
+          if ($LASTEXITCODE -ne 0) {
+            $failed = $true
+          }
+
+          $env:CONTAM_REGRESSION_REPORT_PATH = Join-Path $artifactDir "medium-office-summary.json"
+          npm run regression:medium-office 2>&1 | Tee-Object -FilePath (Join-Path $artifactDir "medium-office.log")
+          if ($LASTEXITCODE -ne 0) {
+            $failed = $true
+          }
+
+          if ($failed) {
+            throw "One or more official CONTAM regressions failed."
+          }
+
+      - name: Upload regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contam-mcp-regression-artifacts
+          path: tmp/ci-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14

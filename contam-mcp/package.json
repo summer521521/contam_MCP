@@ -1,0 +1,18 @@
+{
+  "name": "contam-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local MCP server that wraps CONTAM command-line tools for Codex Desktop on Windows.",
+  "scripts": {
+    "start": "node ./src/server.js",
+    "inspect": "node --inspect ./src/server.js",
+    "regression:cottage": "node ./scripts/regression-cottage.mjs",
+    "regression:medium-office": "node ./scripts/regression-medium-office.mjs",
+    "regression:official": "npm run regression:cottage && npm run regression:medium-office"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^3.25.76"
+  }
+}
