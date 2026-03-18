@@ -1,6 +1,10 @@
-# CONTAM MCP Server
+# CONTAM MCP Developer Guide
 
-这个目录提供一个本地 `stdio` MCP server，用来把当前目录里的 CONTAM 命令行工具封装给 Codex Desktop / Codex Windows App 调用。
+这个 README 面向维护者和开发者。
+
+如果只是想安装和使用这个项目，请先看仓库根目录的 `README.md`。本文件主要记录 server 实现、回归测试、CI 和开发细节。
+
+这个目录提供一个本地 `stdio` MCP server，用来把仓库根目录里的 CONTAM 命令行工具封装给 Codex Desktop / Codex Windows App 调用。
 
 目前封装的是稳定、可自动化的 CLI 能力：
 
