@@ -57,6 +57,10 @@ This avoids manually pointing a host at a local `server.js` path.
 - clone baseline projects into named scenario folders
 - create and optionally run small case matrices from one baseline project
 - run `contamx3.exe`
+- discover and use optional `contamxpy` bindings for paper-style ContamX API co-simulation
+- inspect API-level zones, paths, AHS, contaminants, and control nodes through `contamxpy`
+- advance models step by step through `contamxpy` while applying supported weather, AHS, zone, envelope, and control adjustments
+- discover Rhino/Grasshopper ANT availability for model-creation workflows
 - upgrade old `.prj` files with `prjup.exe`
 - compare `.sim` files with `simcomp.exe`
 - export `simread` text output
@@ -86,6 +90,9 @@ For the full step-by-step tutorial, see:
 - `Create baseline and intervention scenario folders from this PRJ.`
 - `Run a small case matrix from this baseline model.`
 - `Analyze this CONTAM xlog or simread text export.`
+- `Discover whether contamxpy and ANT are available.`
+- `Inspect this PRJ through contamxpy and list zones, paths, AHS, and controls.`
+- `Run two contamxpy co-simulation steps and sample zone concentration and path flow.`
 - `Start a CONTAM bridge session for this project.`
 - `List the zones in the active bridge session.`
 - `Advance the active bridge session by 300 seconds and return path flow updates.`
@@ -124,3 +131,10 @@ GitHub Actions also runs this check automatically.
 If you want to extend the server, review bridge protocol coverage, or run the official regression suite, start here:
 
 - [Developer Guide](contam-mcp/README.md)
+
+Optional `contamxpy` setup for local API co-simulation:
+
+```powershell
+npm run setup:contamxpy
+npm run regression:contamxpy
+```

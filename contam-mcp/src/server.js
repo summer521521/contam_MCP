@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, stat, unlink, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -208,6 +208,171 @@ async function resolveExecutable(programKey) {
   );
 }
 
+async function resolveContamxpyPython() {
+  const candidates = [
+    process.env.CONTAMXPY_PYTHON ? { command: asAbsolutePath(process.env.CONTAMXPY_PYTHON), argsPrefix: [] } : null,
+    { command: path.join(workspaceRoot, ".venv-contamxpy", "Scripts", "python.exe"), argsPrefix: [] },
+    process.env.PYTHON ? { command: asAbsolutePath(process.env.PYTHON), argsPrefix: [] } : null,
+    { command: "python", argsPrefix: [] },
+    { command: "py", argsPrefix: ["-3"] }
+  ].filter(Boolean);
+
+  const attempts = [];
+  for (const candidate of candidates) {
+    if (path.isAbsolute(candidate.command) && !(await fileExists(candidate.command))) {
+      attempts.push({
+        command: candidate.command,
+        available: false,
+        reason: "missing file"
+      });
+      continue;
+    }
+
+    const version = await runProcess(candidate.command, [...candidate.argsPrefix, "--version"], {
+      cwd: workspaceRoot,
+      timeoutSeconds: 15
+    }).catch((error) => ({
+      ok: false,
+      stdout: "",
+      stderr: error.message,
+      exitCode: -1
+    }));
+
+    attempts.push({
+      command: candidate.command,
+      argsPrefix: candidate.argsPrefix,
+      available: version.ok,
+      version: version.stdout || version.stderr,
+      exitCode: version.exitCode
+    });
+
+    if (version.ok) {
+      return {
+        ...candidate,
+        attempts
+      };
+    }
+  }
+
+  return {
+    command: null,
+    argsPrefix: [],
+    attempts
+  };
+}
+
+async function runContamxpyDriver(action, request = {}) {
+  const python = await resolveContamxpyPython();
+  if (!python.command) {
+    return {
+      ok: false,
+      error: "No Python interpreter is available for contamxpy.",
+      python
+    };
+  }
+
+  const driverPath = path.join(workspaceRoot, "contam-mcp", "scripts", "contamxpy-driver.py");
+  const tempDirectory = path.join(workspaceRoot, "tmp", "mcp-python");
+  await mkdir(tempDirectory, { recursive: true });
+
+  const requestPath = path.join(tempDirectory, `${randomUUID()}-request.json`);
+  const outputPath = path.join(tempDirectory, `${randomUUID()}-output.json`);
+  await writeFile(requestPath, `${JSON.stringify(request, null, 2)}\n`, { encoding: "utf8" });
+
+  const env = {
+    ...process.env
+  };
+  if (process.env.CONTAMXPY_PYTHONPATH) {
+    env.PYTHONPATH = process.env.CONTAMXPY_PYTHONPATH;
+  }
+
+  const result = await runProcess(
+    python.command,
+    [
+      ...python.argsPrefix,
+      driverPath,
+      "--action",
+      action,
+      "--request",
+      requestPath,
+      "--output",
+      outputPath
+    ],
+    {
+      cwd: workspaceRoot,
+      timeoutSeconds: request.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
+      env
+    }
+  );
+
+  let driverResponse = null;
+  if (await fileExists(outputPath)) {
+    driverResponse = JSON.parse(await readFile(outputPath, { encoding: "utf8" }));
+  }
+
+  await unlink(requestPath).catch(() => {});
+  await unlink(outputPath).catch(() => {});
+
+  return {
+    ok: result.ok && driverResponse?.ok === true,
+    python: {
+      command: python.command,
+      argsPrefix: python.argsPrefix,
+      attempts: python.attempts
+    },
+    process: result,
+    driver: driverResponse
+  };
+}
+
+async function discoverRhinoAntStack() {
+  const appData = process.env.APPDATA ?? "";
+  const envAntRoot = process.env.CONTAM_ANT_ROOT || process.env.ANT_ROOT || null;
+  const envRhinoExe = process.env.RHINO_EXE || null;
+  const rhinoCandidates = unique([
+    envRhinoExe ? asAbsolutePath(envRhinoExe) : null,
+    "C:\\Program Files\\Rhino 8\\System\\Rhino.exe",
+    "C:\\Program Files\\Rhino 7\\System\\Rhino.exe",
+    "C:\\Program Files\\Rhino 6\\System\\Rhino.exe"
+  ]);
+  const grasshopperLibraryDirectory = appData
+    ? path.join(appData, "Grasshopper", "Libraries")
+    : null;
+  const antRoot = envAntRoot ? asAbsolutePath(envAntRoot) : null;
+
+  const rhino = [];
+  for (const candidate of rhinoCandidates) {
+    rhino.push({
+      path: candidate,
+      found: await fileExists(candidate)
+    });
+  }
+
+  const antFiles =
+    grasshopperLibraryDirectory && (await directoryExists(grasshopperLibraryDirectory))
+      ? (await walkDirectory(grasshopperLibraryDirectory, true, [".gha", ".dll", ".yak"], 200)).filter((item) =>
+          item.path.toLowerCase().includes("ant")
+        )
+      : [];
+
+  return {
+    rhino,
+    grasshopperLibraryDirectory,
+    grasshopperLibraryFound: grasshopperLibraryDirectory
+      ? await directoryExists(grasshopperLibraryDirectory)
+      : false,
+    antRoot,
+    antRootFound: antRoot ? await directoryExists(antRoot) : false,
+    antFiles,
+    available: rhino.some((item) => item.found) && (antRoot ? await directoryExists(antRoot) : antFiles.length > 0),
+    notes: [
+      "ANT/ContamP.net model creation requires Rhino/Grasshopper plus the ANT plugin.",
+      "Set CONTAM_ANT_ROOT if ANT is installed outside the Grasshopper Libraries folder.",
+      "This MCP server can discover the stack, but it does not automate the Rhino GUI yet."
+    ]
+  };
+}
+
 function toolResponse(summary, payload) {
   return {
     content: [
@@ -231,7 +396,7 @@ async function runProcess(executablePath, args, options = {}) {
   return await new Promise((resolve, reject) => {
     const child = spawn(executablePath, args, {
       cwd,
-      env: process.env,
+      env: options.env ?? process.env,
       windowsHide: true,
       stdio: "pipe"
     });
@@ -2610,6 +2775,144 @@ server.tool(
     );
 
     return toolResponse("Updated CONTAM project references.", summary);
+  }
+);
+
+server.tool(
+  "discover_contam_api_stack",
+  "Use this when you need to determine whether the paper-style CONTAM API stack is available, including contamxpy for ContamX co-simulation and Rhino/Grasshopper ANT for model creation.",
+  {
+    timeoutSeconds: z.number().int().min(1).max(120).optional()
+  },
+  async ({ timeoutSeconds }) => {
+    const [contamxpy, ant] = await Promise.all([
+      runContamxpyDriver("discover", { timeoutSeconds: timeoutSeconds ?? 30 }),
+      discoverRhinoAntStack()
+    ]);
+
+    return toolResponse("Discovered CONTAM API integration stack.", {
+      contamxpy: {
+        available: contamxpy.ok,
+        python: contamxpy.python,
+        details: contamxpy.driver?.payload ?? null,
+        error: contamxpy.ok ? null : contamxpy.driver?.error ?? contamxpy.error ?? contamxpy.process?.stderr
+      },
+      ant,
+      capabilities: {
+        commandLineAutomation: true,
+        bridgeCosimulation: true,
+        contamxpyCosimulation: contamxpy.ok,
+        antModelCreation: ant.available,
+        fullContampLibModelCreation: false
+      }
+    });
+  }
+);
+
+server.tool(
+  "inspect_contamxpy_project",
+  "Use this when you want to initialize a CONTAM project through the official contamxpy bindings and read API-level zones, paths, AHS, contaminants, and control metadata.",
+  {
+    projectPath: z.string(),
+    maxEntities: z.number().int().min(1).max(1000).optional(),
+    useCosim: z.boolean().optional(),
+    wpMode: z.number().int().min(0).max(1).optional(),
+    timeoutSeconds: z.number().int().min(1).max(300).optional()
+  },
+  async ({ projectPath, maxEntities, useCosim, wpMode, timeoutSeconds }) => {
+    const result = await runContamxpyDriver("inspect", {
+      projectPath: asAbsolutePath(projectPath),
+      maxEntities,
+      useCosim,
+      wpMode,
+      timeoutSeconds: timeoutSeconds ?? 120
+    });
+
+    if (!result.ok) {
+      throw new Error(result.driver?.error ?? result.process?.stderr ?? "contamxpy project inspection failed.");
+    }
+
+    return toolResponse("Inspected CONTAM project through contamxpy.", {
+      python: result.python,
+      ...result.driver.payload
+    });
+  }
+);
+
+server.tool(
+  "run_contamxpy_cosimulation",
+  "Use this when you need paper-style ContamX API co-simulation: advance a PRJ model step by step, apply supported adjustments, and sample selected zone concentrations, flows, and control values.",
+  {
+    projectPath: z.string(),
+    maxSteps: z.number().int().min(1).max(10000).optional(),
+    sampleEverySteps: z.number().int().min(1).max(10000).optional(),
+    sampleInitial: z.boolean().optional(),
+    useCosim: z.boolean().optional(),
+    wpMode: z.number().int().min(0).max(1).optional(),
+    timeoutSeconds: z.number().int().min(1).max(3600).optional(),
+    zoneMassFractionRequests: z
+      .array(
+        z.object({
+          zoneNumber: z.number().int().min(1),
+          contaminantNumber: z.number().int().min(1)
+        })
+      )
+      .optional(),
+    pathFlowRequests: z.array(z.number().int().min(1)).optional(),
+    ductTerminalFlowRequests: z.array(z.number().int().min(1)).optional(),
+    ductLeakFlowRequests: z.array(z.number().int().min(1)).optional(),
+    outputControlValueRequests: z.array(z.number().int().min(1)).optional(),
+    envelopeExfilRequests: z
+      .array(
+        z.object({
+          environmentIndex: z.number().int().min(1),
+          contaminantNumber: z.number().int().min(1)
+        })
+      )
+      .optional(),
+    adjustments: z.array(z.object({ kind: z.string(), atStep: z.number().int().min(0).optional() }).passthrough()).optional()
+  },
+  async ({
+    projectPath,
+    maxSteps,
+    sampleEverySteps,
+    sampleInitial,
+    useCosim,
+    wpMode,
+    timeoutSeconds,
+    zoneMassFractionRequests,
+    pathFlowRequests,
+    ductTerminalFlowRequests,
+    ductLeakFlowRequests,
+    outputControlValueRequests,
+    envelopeExfilRequests,
+    adjustments
+  }) => {
+    const result = await runContamxpyDriver("cosim", {
+      projectPath: asAbsolutePath(projectPath),
+      maxSteps: maxSteps ?? 10,
+      sampleEverySteps: sampleEverySteps ?? 1,
+      sampleInitial,
+      useCosim,
+      wpMode,
+      timeoutSeconds: timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
+      zoneMassFractionRequests,
+      pathFlowRequests,
+      ductTerminalFlowRequests,
+      ductLeakFlowRequests,
+      outputControlValueRequests,
+      envelopeExfilRequests,
+      adjustments
+    });
+
+    if (!result.ok) {
+      throw new Error(result.driver?.error ?? result.process?.stderr ?? "contamxpy co-simulation failed.");
+    }
+
+    return toolResponse("Ran CONTAM co-simulation through contamxpy.", {
+      python: result.python,
+      ...result.driver.payload
+    });
   }
 );
 

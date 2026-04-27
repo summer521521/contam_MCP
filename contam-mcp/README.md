@@ -20,6 +20,9 @@ The current server exposes stable, automation-friendly operations:
 - `inspect_contam_project`
 - `diagnose_contam_project`
 - `update_contam_project_references`
+- `discover_contam_api_stack`
+- `inspect_contamxpy_project`
+- `run_contamxpy_cosimulation`
 - `create_contam_case_variant`
 - `run_contam_case_matrix`
 - `analyze_contam_text_results`
@@ -66,6 +69,7 @@ If startup succeeds, the process will wait for MCP traffic on `stdio`. It will n
 The repository includes two real NIST regression cases:
 
 ```powershell
+npm run regression:contamxpy
 npm run regression:case-matrix
 npm run regression:cottage
 npm run regression:medium-office
@@ -193,6 +197,50 @@ Updates these `.prj` references directly:
 - `ewcFile`
 
 By default it writes a `.mcp.bak` backup next to the original project.
+
+### `discover_contam_api_stack`
+
+Checks optional paper-style API integrations:
+
+- `contamxpy` Python bindings for `contamx-lib`
+- Rhino executable candidates
+- Grasshopper user library folder
+- ANT plugin files or `CONTAM_ANT_ROOT`
+
+The command-line and bridge tools remain usable without these optional integrations.
+
+### `inspect_contamxpy_project`
+
+Initializes a `.prj` through `contamxpy.cxLib` and returns API-level metadata:
+
+- contaminants
+- zones
+- paths and environment paths
+- simple AHS metadata
+- duct junctions, terminals, and leaks
+- input and output control nodes
+- simulation time settings
+
+### `run_contamxpy_cosimulation`
+
+Runs ContamX through the official Python bindings in co-simulation mode.
+
+It can step a model forward and sample selected values:
+
+- zone contaminant mass fractions
+- path flows
+- duct terminal and leak flows
+- output control values
+- envelope exfiltration
+
+It can apply supported adjustments before selected steps:
+
+- ambient temperature, pressure, wind, and contaminant mass fractions
+- zone and junction temperatures
+- added zone contaminant mass
+- simple AHS outdoor-air fraction and supply/return path flow
+- input control values
+- envelope wind pressure and contaminant mass fractions
 
 ### `create_contam_case_variant`
 
@@ -385,6 +433,8 @@ simread mycase.sim < responses.txt
 - `contamw3.exe` GUI automation is not implemented.
 - full `contamp-lib`-style creation of zones, paths, schedules, and source/sink elements is not implemented
 - case matrix generation is template-based: it clones existing project folders and edits supported file references
+- `contamxpy` is optional and must be installed separately, for example with `npm run setup:contamxpy` from the repository root
+- ANT model creation requires Rhino/Grasshopper and the ANT plugin; this server currently discovers that stack but does not automate the Rhino GUI
 - `simread` response scripts still depend on CONTAM's own prompt flow.
 - bridge mode does not yet cover every possible coupling message
 - junctions do not carry original ContamW names, so junction control currently uses generated labels such as `Junction N` and `Terminal N`
@@ -395,9 +445,10 @@ simread mycase.sim < responses.txt
 If you want to extend the server, the next high-value areas are:
 
 1. more bridge-mode adjustment messages
-2. reusable `simread` export templates
-3. finer-grained `.prj` editing tools
-4. project packaging and transfer utilities
+2. ANT/Grasshopper automation hooks once Rhino and ANT are available on the host
+3. reusable `simread` export templates
+4. finer-grained `.prj` editing tools
+5. project packaging and transfer utilities
 
 ## References
 
