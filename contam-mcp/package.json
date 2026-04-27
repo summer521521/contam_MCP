@@ -8,6 +8,7 @@
     "start": "node ./src/server.js",
     "inspect": "node --inspect ./src/server.js",
     "privacy:check": "node ./scripts/check-repo-privacy.mjs",
+    "regression:case-matrix": "node ./scripts/regression-case-matrix.mjs",
     "regression:cottage": "node ./scripts/regression-cottage.mjs",
     "regression:medium-office": "node ./scripts/regression-medium-office.mjs",
     "regression:official": "npm run regression:cottage && npm run regression:medium-office"

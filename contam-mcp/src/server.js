@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, copyFile, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +36,7 @@ const DEFAULT_CASE_EXTENSIONS = [
   ".log",
   ".txt"
 ];
+const DEFAULT_CASE_COPY_EXCLUDED_EXTENSIONS = new Set([".exe", ".dll", ".chm"]);
 
 const OUTDOOR_ZONE_ALIASES = new Set([
   "0",
@@ -54,6 +55,7 @@ const projectReferenceDescriptors = [
   { key: "wpcFile", commentLabel: "wpc file" },
   { key: "ewcFile", commentLabel: "ewc file" }
 ];
+const SUPPORTED_REFERENCE_KEYS = new Set(projectReferenceDescriptors.map((descriptor) => descriptor.key));
 
 const bridgeMessageTypes = {
   CX_READY: 0,
@@ -139,6 +141,15 @@ async function fileExists(filePath) {
   try {
     await access(filePath);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+async function directoryExists(directoryPath) {
+  try {
+    const info = await stat(directoryPath);
+    return info.isDirectory();
   } catch {
     return false;
   }
@@ -333,6 +344,110 @@ async function collectProjectArtifacts(projectPath) {
     .sort();
 }
 
+function sanitizeCaseName(caseName) {
+  const normalized = String(caseName ?? "")
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/[. ]+$/g, "");
+
+  if (!normalized) {
+    throw new Error("Case name must contain at least one filesystem-safe character.");
+  }
+
+  if (normalized === "." || normalized === "..") {
+    throw new Error(`Case name '${caseName}' is not allowed.`);
+  }
+
+  return normalized.slice(0, 120);
+}
+
+function assertTargetOutsideSource(sourceDirectory, targetDirectory) {
+  const relative = path.relative(sourceDirectory, targetDirectory);
+  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+    throw new Error(
+      `Output case directory must be outside the source project directory to avoid recursive self-copy: ${targetDirectory}`
+    );
+  }
+}
+
+function normalizeOptionalExtensions(extensions) {
+  if (!extensions) {
+    return null;
+  }
+
+  return normalizeExtensions(extensions);
+}
+
+function shouldCopyCaseFile(fileName, extensions) {
+  const extension = path.extname(fileName).toLowerCase();
+  if (extensions) {
+    return extensions.includes(extension);
+  }
+
+  return !DEFAULT_CASE_COPY_EXCLUDED_EXTENSIONS.has(extension);
+}
+
+async function copyCaseDirectory(sourceDirectory, targetDirectory, options = {}) {
+  const recursive = options.recursive ?? false;
+  const overwrite = options.overwrite ?? false;
+  const extensions = normalizeOptionalExtensions(options.extensions);
+  const copiedFiles = [];
+  const skippedFiles = [];
+
+  assertTargetOutsideSource(sourceDirectory, targetDirectory);
+
+  if (await directoryExists(targetDirectory)) {
+    const existingEntries = await readdir(targetDirectory);
+    if (existingEntries.length > 0 && !overwrite) {
+      throw new Error(`Output case directory already exists and is not empty: ${targetDirectory}`);
+    }
+  }
+
+  async function copyEntries(currentSource, currentTarget, relativePrefix = "") {
+    await mkdir(currentTarget, { recursive: true });
+    const entries = await readdir(currentSource, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const sourcePath = path.join(currentSource, entry.name);
+      const targetPath = path.join(currentTarget, entry.name);
+      const relativePath = relativePrefix ? path.join(relativePrefix, entry.name) : entry.name;
+
+      if (entry.isDirectory()) {
+        if (recursive) {
+          await copyEntries(sourcePath, targetPath, relativePath);
+        }
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!shouldCopyCaseFile(entry.name, extensions)) {
+        skippedFiles.push(relativePath);
+        continue;
+      }
+
+      await copyFile(sourcePath, targetPath);
+      copiedFiles.push(relativePath);
+    }
+  }
+
+  await copyEntries(sourceDirectory, targetDirectory);
+
+  return {
+    sourceDirectory,
+    targetDirectory,
+    recursive,
+    overwrite,
+    copiedFileCount: copiedFiles.length,
+    copiedFiles: copiedFiles.sort(),
+    skippedFileCount: skippedFiles.length,
+    skippedFiles: skippedFiles.sort()
+  };
+}
+
 async function readProjectLines(projectPath) {
   const text = await readFile(projectPath, { encoding: "utf8" });
   return text.replace(/\r\n/g, "\n").split("\n");
@@ -449,6 +564,104 @@ async function inspectContamProject(projectPath) {
   };
 }
 
+async function createContamCaseVariant({
+  baseProjectPath,
+  outputDirectory,
+  caseName,
+  referenceUpdates,
+  createBackup,
+  copyRecursively,
+  overwrite,
+  copyExtensions
+}) {
+  const resolvedBaseProjectPath = asAbsolutePath(baseProjectPath);
+  if (!(await fileExists(resolvedBaseProjectPath))) {
+    throw new Error(`Base project file not found: ${resolvedBaseProjectPath}`);
+  }
+
+  const baseProjectDirectory = path.dirname(resolvedBaseProjectPath);
+  const resolvedOutputDirectory = asAbsolutePath(outputDirectory);
+  const sanitizedCaseName = sanitizeCaseName(caseName);
+  const caseDirectory = path.join(resolvedOutputDirectory, sanitizedCaseName);
+  const copySummary = await copyCaseDirectory(baseProjectDirectory, caseDirectory, {
+    recursive: copyRecursively ?? false,
+    overwrite: overwrite ?? false,
+    extensions: copyExtensions
+  });
+  const projectPath = path.join(caseDirectory, path.basename(resolvedBaseProjectPath));
+
+  if (!(await fileExists(projectPath))) {
+    throw new Error(`Copied case does not contain the expected project file: ${projectPath}`);
+  }
+
+  const normalizedUpdates = normalizeReferenceUpdates(referenceUpdates ?? {});
+  const referenceUpdateSummary =
+    Object.keys(normalizedUpdates).length > 0
+      ? await applyContamProjectReferenceUpdates(projectPath, normalizedUpdates, createBackup !== false)
+      : null;
+  const inspection = await inspectContamProject(projectPath);
+
+  return {
+    caseName: sanitizedCaseName,
+    caseDirectory,
+    projectPath,
+    copySummary,
+    referenceUpdateSummary,
+    inspection
+  };
+}
+
+async function runContamSimulation({
+  projectPath,
+  workingDirectory,
+  timeoutSeconds,
+  testInputOnly,
+  bridgeAddress,
+  windFromBridge,
+  volumeFlowBridge
+}) {
+  const executablePath = await resolveExecutable("contamx");
+  const resolvedProjectPath = asAbsolutePath(projectPath);
+
+  if (!(await fileExists(resolvedProjectPath))) {
+    throw new Error(`Project file not found: ${resolvedProjectPath}`);
+  }
+
+  const projectDirectory = path.dirname(resolvedProjectPath);
+  const resolvedWorkingDirectory = asAbsolutePath(workingDirectory ?? projectDirectory);
+  const args = [resolvedProjectPath];
+
+  if (testInputOnly) {
+    args.push("-t");
+  }
+  if (bridgeAddress) {
+    args.push("-b", bridgeAddress);
+  }
+  if (windFromBridge) {
+    args.push("-w");
+  }
+  if (volumeFlowBridge) {
+    args.push("-f");
+  }
+
+  const before = await snapshotDirectory(projectDirectory);
+  const result = await runProcess(executablePath, args, {
+    cwd: resolvedWorkingDirectory,
+    timeoutSeconds: timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS
+  });
+  const after = await snapshotDirectory(projectDirectory);
+
+  return {
+    executablePath,
+    projectPath: resolvedProjectPath,
+    workingDirectory: resolvedWorkingDirectory,
+    args,
+    ...result,
+    fileChanges: diffSnapshots(before, after),
+    artifacts: await collectProjectArtifacts(resolvedProjectPath)
+  };
+}
+
 async function findFilesByBasename(rootDirectory, basename, maxMatches = 5) {
   const matches = [];
   const stack = [rootDirectory];
@@ -483,6 +696,63 @@ function buildReferenceLine(existingLine, commentPart, newValue) {
   const leadingWhitespace = existingLine.match(/^\s*/)?.[0] ?? "";
   const valueText = newValue ?? "null";
   return `${leadingWhitespace}${valueText} ! ${commentPart}`;
+}
+
+function normalizeReferenceUpdates(referenceUpdates = {}) {
+  const normalized = {};
+
+  for (const key of Object.keys(referenceUpdates ?? {})) {
+    if (!SUPPORTED_REFERENCE_KEYS.has(key)) {
+      throw new Error(`Unsupported CONTAM project reference key '${key}'.`);
+    }
+    if (referenceUpdates[key] !== undefined) {
+      normalized[key] = referenceUpdates[key];
+    }
+  }
+
+  return normalized;
+}
+
+async function applyContamProjectReferenceUpdates(projectPath, referenceUpdates, createBackup = true) {
+  const requestedUpdates = normalizeReferenceUpdates(referenceUpdates);
+  const keysToUpdate = Object.keys(requestedUpdates);
+
+  if (keysToUpdate.length === 0) {
+    throw new Error("No reference updates were provided.");
+  }
+
+  const lines = await readProjectLines(projectPath);
+  const inspectionBefore = inspectContamProjectLines(lines);
+
+  for (const key of keysToUpdate) {
+    const descriptor = projectReferenceDescriptors.find((item) => item.key === key);
+    const reference = inspectionBefore.references[key];
+
+    if (!descriptor || !reference || reference.lineNumber === null) {
+      throw new Error(`Could not find a '${key}' line inside ${projectPath}.`);
+    }
+
+    const lineIndex = reference.lineNumber - 1;
+    lines[lineIndex] = buildReferenceLine(lines[lineIndex], reference.comment, requestedUpdates[key]);
+  }
+
+  if (createBackup) {
+    const backupPath = `${projectPath}.mcp.bak`;
+    if (!(await fileExists(backupPath))) {
+      await copyFile(projectPath, backupPath);
+    }
+  }
+
+  await writeFile(projectPath, `${lines.join("\r\n")}\r\n`, { encoding: "utf8" });
+  const inspectionAfter = await inspectContamProject(projectPath);
+
+  return {
+    projectPath,
+    backupCreated: createBackup,
+    requestedUpdates,
+    before: inspectionBefore.references,
+    after: inspectionAfter.references
+  };
 }
 
 function buildIndexedFloatAdjustment(ids, values) {
@@ -2023,6 +2293,85 @@ async function walkDirectory(rootDirectory, recursive, extensions, maxResults) {
   return matches.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+function analyzeTextResultContent(text, options = {}) {
+  const maxPreviewLines = Math.min(Math.max(options.maxPreviewLines ?? 40, 1), 200);
+  const maxColumns = Math.min(Math.max(options.maxColumns ?? 20, 1), 100);
+  const minNumbersPerRow = Math.min(Math.max(options.minNumbersPerRow ?? 2, 1), 20);
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const nonEmptyLines = lines.map((line) => line.trim()).filter(Boolean);
+  const numericRows = [];
+  const headingCandidates = [];
+  const numberMatcher = /[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?/g;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index].trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const matches = [...trimmed.matchAll(numberMatcher)].map((match) => Number(match[0]));
+    const finiteNumbers = matches.filter((value) => Number.isFinite(value));
+
+    if (finiteNumbers.length >= minNumbersPerRow) {
+      numericRows.push({
+        lineNumber: index + 1,
+        values: finiteNumbers.slice(0, maxColumns)
+      });
+      continue;
+    }
+
+    if (
+      trimmed.length >= 3 &&
+      trimmed.length <= 120 &&
+      !/^[\-=_*]+$/.test(trimmed) &&
+      finiteNumbers.length <= 1
+    ) {
+      headingCandidates.push(trimmed);
+    }
+  }
+
+  const columnStats = [];
+  for (let columnIndex = 0; columnIndex < maxColumns; columnIndex += 1) {
+    const values = numericRows
+      .map((row) => row.values[columnIndex])
+      .filter((value) => Number.isFinite(value));
+
+    if (values.length === 0) {
+      continue;
+    }
+
+    const sum = values.reduce((accumulator, value) => accumulator + value, 0);
+    columnStats.push({
+      column: columnIndex + 1,
+      count: values.length,
+      min: Math.min(...values),
+      max: Math.max(...values),
+      mean: sum / values.length
+    });
+  }
+
+  return {
+    lineCount: lines.length,
+    nonEmptyLineCount: nonEmptyLines.length,
+    preview: nonEmptyLines.slice(0, maxPreviewLines),
+    headingCandidates: unique(headingCandidates).slice(0, 80),
+    numericRowCount: numericRows.length,
+    numericRowPreview: numericRows.slice(0, 20),
+    columnStats
+  };
+}
+
+const referenceUpdatesSchema = z
+  .object({
+    weatherFile: z.string().nullable().optional(),
+    contaminantFile: z.string().nullable().optional(),
+    continuousValuesFile: z.string().nullable().optional(),
+    discreteValuesFile: z.string().nullable().optional(),
+    wpcFile: z.string().nullable().optional(),
+    ewcFile: z.string().nullable().optional()
+  })
+  .strict();
+
 const server = new McpServer({
   name: "contam-mcp",
   version: "0.1.0"
@@ -2247,54 +2596,343 @@ server.tool(
       throw new Error(`Project file not found: ${resolvedProjectPath}`);
     }
 
-    const requestedUpdates = {
-      weatherFile,
-      contaminantFile,
-      continuousValuesFile,
-      discreteValuesFile,
-      wpcFile,
-      ewcFile
-    };
-    const keysToUpdate = Object.keys(requestedUpdates).filter(
-      (key) => Object.prototype.hasOwnProperty.call(requestedUpdates, key) && requestedUpdates[key] !== undefined
+    const summary = await applyContamProjectReferenceUpdates(
+      resolvedProjectPath,
+      {
+        weatherFile,
+        contaminantFile,
+        continuousValuesFile,
+        discreteValuesFile,
+        wpcFile,
+        ewcFile
+      },
+      createBackup !== false
     );
 
-    if (keysToUpdate.length === 0) {
-      throw new Error("No reference updates were provided.");
-    }
+    return toolResponse("Updated CONTAM project references.", summary);
+  }
+);
 
-    const lines = await readProjectLines(resolvedProjectPath);
-    const inspectionBefore = inspectContamProjectLines(lines);
-
-    for (const key of keysToUpdate) {
-      const descriptor = projectReferenceDescriptors.find((item) => item.key === key);
-      const reference = inspectionBefore.references[key];
-
-      if (!descriptor || !reference || reference.lineNumber === null) {
-        throw new Error(`Could not find a '${key}' line inside ${resolvedProjectPath}.`);
-      }
-
-      const lineIndex = reference.lineNumber - 1;
-      lines[lineIndex] = buildReferenceLine(lines[lineIndex], reference.comment, requestedUpdates[key]);
-    }
-
-    if (createBackup !== false) {
-      const backupPath = `${resolvedProjectPath}.mcp.bak`;
-      if (!(await fileExists(backupPath))) {
-        await copyFile(resolvedProjectPath, backupPath);
-      }
-    }
-
-    await writeFile(resolvedProjectPath, `${lines.join("\r\n")}\r\n`, { encoding: "utf8" });
-    const inspectionAfter = await inspectContamProject(resolvedProjectPath);
-
-    return toolResponse("Updated CONTAM project references.", {
-      projectPath: resolvedProjectPath,
-      backupCreated: createBackup !== false,
-      requestedUpdates,
-      before: inspectionBefore.references,
-      after: inspectionAfter.references
+server.tool(
+  "create_contam_case_variant",
+  "Use this when you need to clone an existing CONTAM project folder into a named scenario folder and optionally update supported PRJ references before running it.",
+  {
+    baseProjectPath: z.string(),
+    outputDirectory: z.string(),
+    caseName: z.string(),
+    referenceUpdates: referenceUpdatesSchema.optional(),
+    createBackup: z.boolean().optional(),
+    copyRecursively: z.boolean().optional(),
+    overwrite: z.boolean().optional(),
+    copyExtensions: z.array(z.string()).optional()
+  },
+  async ({
+    baseProjectPath,
+    outputDirectory,
+    caseName,
+    referenceUpdates,
+    createBackup,
+    copyRecursively,
+    overwrite,
+    copyExtensions
+  }) => {
+    const variant = await createContamCaseVariant({
+      baseProjectPath,
+      outputDirectory,
+      caseName,
+      referenceUpdates,
+      createBackup,
+      copyRecursively,
+      overwrite,
+      copyExtensions
     });
+
+    return toolResponse("Created CONTAM case variant.", variant);
+  }
+);
+
+server.tool(
+  "run_contam_case_matrix",
+  "Use this when you need to create multiple named CONTAM scenario folders from one baseline PRJ and optionally run each scenario sequentially.",
+  {
+    baseProjectPath: z.string(),
+    outputDirectory: z.string(),
+    cases: z
+      .array(
+        z.object({
+          name: z.string(),
+          referenceUpdates: referenceUpdatesSchema.optional(),
+          runSimulation: z.boolean().optional(),
+          testInputOnly: z.boolean().optional(),
+          timeoutSeconds: z.number().int().min(1).max(3600).optional()
+        })
+      )
+      .min(1)
+      .max(100),
+    runSimulation: z.boolean().optional(),
+    testInputOnly: z.boolean().optional(),
+    timeoutSeconds: z.number().int().min(1).max(3600).optional(),
+    createBackup: z.boolean().optional(),
+    copyRecursively: z.boolean().optional(),
+    overwrite: z.boolean().optional(),
+    copyExtensions: z.array(z.string()).optional()
+  },
+  async ({
+    baseProjectPath,
+    outputDirectory,
+    cases,
+    runSimulation,
+    testInputOnly,
+    timeoutSeconds,
+    createBackup,
+    copyRecursively,
+    overwrite,
+    copyExtensions
+  }) => {
+    const results = [];
+
+    for (const caseSpec of cases) {
+      const variant = await createContamCaseVariant({
+        baseProjectPath,
+        outputDirectory,
+        caseName: caseSpec.name,
+        referenceUpdates: caseSpec.referenceUpdates,
+        createBackup,
+        copyRecursively,
+        overwrite,
+        copyExtensions
+      });
+      const shouldRun = caseSpec.runSimulation ?? runSimulation ?? false;
+      const simulation = shouldRun
+        ? await runContamSimulation({
+            projectPath: variant.projectPath,
+            workingDirectory: variant.caseDirectory,
+            testInputOnly: caseSpec.testInputOnly ?? testInputOnly,
+            timeoutSeconds: caseSpec.timeoutSeconds ?? timeoutSeconds
+          })
+        : null;
+
+      results.push({
+        name: variant.caseName,
+        caseDirectory: variant.caseDirectory,
+        projectPath: variant.projectPath,
+        referenceUpdateSummary: variant.referenceUpdateSummary,
+        copiedFileCount: variant.copySummary.copiedFileCount,
+        simulation
+      });
+    }
+
+    return toolResponse("Created CONTAM case matrix.", {
+      baseProjectPath: asAbsolutePath(baseProjectPath),
+      outputDirectory: asAbsolutePath(outputDirectory),
+      caseCount: results.length,
+      ranSimulationCount: results.filter((result) => result.simulation !== null).length,
+      results
+    });
+  }
+);
+
+server.tool(
+  "analyze_contam_text_results",
+  "Use this after simread or other CONTAM text exports when you need a quick generic summary of headings, numeric rows, and numeric column ranges.",
+  {
+    textPath: z.string(),
+    maxPreviewLines: z.number().int().min(1).max(200).optional(),
+    maxColumns: z.number().int().min(1).max(100).optional(),
+    minNumbersPerRow: z.number().int().min(1).max(20).optional()
+  },
+  async ({ textPath, maxPreviewLines, maxColumns, minNumbersPerRow }) => {
+    const resolvedTextPath = asAbsolutePath(textPath);
+    if (!(await fileExists(resolvedTextPath))) {
+      throw new Error(`Text results file not found: ${resolvedTextPath}`);
+    }
+
+    const text = await readFile(resolvedTextPath, { encoding: "utf8" });
+    const info = await stat(resolvedTextPath);
+    const analysis = analyzeTextResultContent(text, {
+      maxPreviewLines,
+      maxColumns,
+      minNumbersPerRow
+    });
+
+    return toolResponse("Analyzed CONTAM text results.", {
+      textPath: resolvedTextPath,
+      size: info.size,
+      modifiedAt: new Date(info.mtimeMs).toISOString(),
+      ...analysis
+    });
+  }
+);
+
+server.tool(
+  "run_contam_simulation",
+  "Use this when you want to validate or run a CONTAM .prj model with ContamX and collect the generated files.",
+  {
+    projectPath: z.string(),
+    workingDirectory: z.string().optional(),
+    timeoutSeconds: z.number().int().min(1).max(3600).optional(),
+    testInputOnly: z.boolean().optional(),
+    bridgeAddress: z.string().optional(),
+    windFromBridge: z.boolean().optional(),
+    volumeFlowBridge: z.boolean().optional()
+  },
+  async ({
+    projectPath,
+    workingDirectory,
+    timeoutSeconds,
+    testInputOnly,
+    bridgeAddress,
+    windFromBridge,
+    volumeFlowBridge
+  }) => {
+    const result = await runContamSimulation({
+      projectPath,
+      workingDirectory,
+      timeoutSeconds,
+      testInputOnly,
+      bridgeAddress,
+      windFromBridge,
+      volumeFlowBridge
+    });
+
+    return toolResponse(
+      result.ok ? "ContamX completed successfully." : "ContamX finished with errors or a non-zero exit code.",
+      result
+    );
+  }
+);
+
+server.tool(
+  "upgrade_contam_project",
+  "Use this when you need to upgrade an older .prj file to a newer CONTAM project format using prjup.",
+  {
+    projectPath: z.string(),
+    targetVersion: z.string().optional(),
+    createBackup: z.boolean().optional(),
+    timeoutSeconds: z.number().int().min(1).max(600).optional()
+  },
+  async ({ projectPath, targetVersion, createBackup, timeoutSeconds }) => {
+    const executablePath = await resolveExecutable("prjup");
+    const resolvedProjectPath = asAbsolutePath(projectPath);
+
+    if (!(await fileExists(resolvedProjectPath))) {
+      throw new Error(`Project file not found: ${resolvedProjectPath}`);
+    }
+
+    const projectDirectory = path.dirname(resolvedProjectPath);
+    const before = await snapshotDirectory(projectDirectory);
+    const args = [resolvedProjectPath];
+
+    if (createBackup === false) {
+      args.push("-n");
+    }
+    if (targetVersion) {
+      args.push(`--projectversion=${targetVersion}`);
+    }
+
+    const result = await runProcess(executablePath, args, {
+      cwd: projectDirectory,
+      timeoutSeconds: timeoutSeconds ?? 60
+    });
+    const after = await snapshotDirectory(projectDirectory);
+
+    return toolResponse(
+      result.ok ? "prjup completed successfully." : "prjup finished with errors or a non-zero exit code.",
+      {
+        executablePath,
+        projectPath: resolvedProjectPath,
+        args,
+        ...result,
+        fileChanges: diffSnapshots(before, after)
+      }
+    );
+  }
+);
+
+server.tool(
+  "compare_contam_sim_results",
+  "Use this when you want to compare two CONTAM .sim result files with simcomp.",
+  {
+    firstSimPath: z.string(),
+    secondSimPath: z.string(),
+    verbosity: z.number().int().min(0).max(3).optional(),
+    timeoutSeconds: z.number().int().min(1).max(600).optional()
+  },
+  async ({ firstSimPath, secondSimPath, verbosity, timeoutSeconds }) => {
+    const executablePath = await resolveExecutable("simcomp");
+    const resolvedFirstPath = asAbsolutePath(firstSimPath);
+    const resolvedSecondPath = asAbsolutePath(secondSimPath);
+
+    for (const filePath of [resolvedFirstPath, resolvedSecondPath]) {
+      if (!(await fileExists(filePath))) {
+        throw new Error(`SIM file not found: ${filePath}`);
+      }
+    }
+
+    const args = [resolvedFirstPath, resolvedSecondPath, String(verbosity ?? 1)];
+    const result = await runProcess(executablePath, args, {
+      cwd: path.dirname(resolvedFirstPath),
+      timeoutSeconds: timeoutSeconds ?? 60
+    });
+
+    return toolResponse(
+      result.ok ? "simcomp completed successfully." : "simcomp finished with errors or a non-zero exit code.",
+      {
+        executablePath,
+        firstSimPath: resolvedFirstPath,
+        secondSimPath: resolvedSecondPath,
+        args,
+        ...result
+      }
+    );
+  }
+);
+
+server.tool(
+  "export_contam_sim_text",
+  "Use this when you need to run simread on a .sim file and you already know the response-script text needed for the interactive prompts.",
+  {
+    simPath: z.string(),
+    responsesText: z.string().optional(),
+    responsesFilePath: z.string().optional(),
+    timeoutSeconds: z.number().int().min(1).max(3600).optional()
+  },
+  async ({ simPath, responsesText, responsesFilePath, timeoutSeconds }) => {
+    if (!responsesText && !responsesFilePath) {
+      throw new Error("Provide either responsesText or responsesFilePath. simread is interactive, so MCP usage must supply a response script.");
+    }
+
+    const executablePath = await resolveExecutable("simread");
+    const resolvedSimPath = asAbsolutePath(simPath);
+
+    if (!(await fileExists(resolvedSimPath))) {
+      throw new Error(`SIM file not found: ${resolvedSimPath}`);
+    }
+
+    const resolvedResponsesFilePath = responsesFilePath ? asAbsolutePath(responsesFilePath) : null;
+    const inputText =
+      responsesText ??
+      normalizeText(await readFile(resolvedResponsesFilePath, { encoding: "utf8" })).concat("\n");
+
+    const simDirectory = path.dirname(resolvedSimPath);
+    const before = await snapshotDirectory(simDirectory);
+    const result = await runProcess(executablePath, [resolvedSimPath], {
+      cwd: simDirectory,
+      timeoutSeconds: timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
+      stdinText: inputText.endsWith("\n") ? inputText : `${inputText}\n`
+    });
+    const after = await snapshotDirectory(simDirectory);
+
+    return toolResponse(
+      result.ok ? "simread completed successfully." : "simread finished with errors or a non-zero exit code.",
+      {
+        executablePath,
+        simPath: resolvedSimPath,
+        responsesSource: resolvedResponsesFilePath ?? "inline responsesText",
+        ...result,
+        fileChanges: diffSnapshots(before, after)
+      }
+    );
   }
 );
 
@@ -2742,207 +3380,6 @@ server.tool(
     await session.close();
 
     return toolResponse("Closed the ContamX bridge session.", summary);
-  }
-);
-
-server.tool(
-  "run_contam_simulation",
-  "Use this when you want to validate or run a CONTAM .prj model with ContamX and collect the generated files.",
-  {
-    projectPath: z.string(),
-    workingDirectory: z.string().optional(),
-    timeoutSeconds: z.number().int().min(1).max(3600).optional(),
-    testInputOnly: z.boolean().optional(),
-    bridgeAddress: z.string().optional(),
-    windFromBridge: z.boolean().optional(),
-    volumeFlowBridge: z.boolean().optional()
-  },
-  async ({
-    projectPath,
-    workingDirectory,
-    timeoutSeconds,
-    testInputOnly,
-    bridgeAddress,
-    windFromBridge,
-    volumeFlowBridge
-  }) => {
-    const executablePath = await resolveExecutable("contamx");
-    const resolvedProjectPath = asAbsolutePath(projectPath);
-
-    if (!(await fileExists(resolvedProjectPath))) {
-      throw new Error(`Project file not found: ${resolvedProjectPath}`);
-    }
-
-    const projectDirectory = path.dirname(resolvedProjectPath);
-    const resolvedWorkingDirectory = asAbsolutePath(workingDirectory ?? projectDirectory);
-    const args = [resolvedProjectPath];
-
-    if (testInputOnly) {
-      args.push("-t");
-    }
-    if (bridgeAddress) {
-      args.push("-b", bridgeAddress);
-    }
-    if (windFromBridge) {
-      args.push("-w");
-    }
-    if (volumeFlowBridge) {
-      args.push("-f");
-    }
-
-    const before = await snapshotDirectory(projectDirectory);
-    const result = await runProcess(executablePath, args, {
-      cwd: resolvedWorkingDirectory,
-      timeoutSeconds: timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS
-    });
-    const after = await snapshotDirectory(projectDirectory);
-
-    return toolResponse(
-      result.ok ? "ContamX completed successfully." : "ContamX finished with errors or a non-zero exit code.",
-      {
-        executablePath,
-        projectPath: resolvedProjectPath,
-        workingDirectory: resolvedWorkingDirectory,
-        args,
-        ...result,
-        fileChanges: diffSnapshots(before, after),
-        artifacts: await collectProjectArtifacts(resolvedProjectPath)
-      }
-    );
-  }
-);
-
-server.tool(
-  "upgrade_contam_project",
-  "Use this when you need to upgrade an older .prj file to a newer CONTAM project format using prjup.",
-  {
-    projectPath: z.string(),
-    targetVersion: z.string().optional(),
-    createBackup: z.boolean().optional(),
-    timeoutSeconds: z.number().int().min(1).max(600).optional()
-  },
-  async ({ projectPath, targetVersion, createBackup, timeoutSeconds }) => {
-    const executablePath = await resolveExecutable("prjup");
-    const resolvedProjectPath = asAbsolutePath(projectPath);
-
-    if (!(await fileExists(resolvedProjectPath))) {
-      throw new Error(`Project file not found: ${resolvedProjectPath}`);
-    }
-
-    const projectDirectory = path.dirname(resolvedProjectPath);
-    const before = await snapshotDirectory(projectDirectory);
-    const args = [resolvedProjectPath];
-
-    if (createBackup === false) {
-      args.push("-n");
-    }
-    if (targetVersion) {
-      args.push(`--projectversion=${targetVersion}`);
-    }
-
-    const result = await runProcess(executablePath, args, {
-      cwd: projectDirectory,
-      timeoutSeconds: timeoutSeconds ?? 60
-    });
-    const after = await snapshotDirectory(projectDirectory);
-
-    return toolResponse(
-      result.ok ? "prjup completed successfully." : "prjup finished with errors or a non-zero exit code.",
-      {
-        executablePath,
-        projectPath: resolvedProjectPath,
-        args,
-        ...result,
-        fileChanges: diffSnapshots(before, after)
-      }
-    );
-  }
-);
-
-server.tool(
-  "compare_contam_sim_results",
-  "Use this when you want to compare two CONTAM .sim result files with simcomp.",
-  {
-    firstSimPath: z.string(),
-    secondSimPath: z.string(),
-    verbosity: z.number().int().min(0).max(3).optional(),
-    timeoutSeconds: z.number().int().min(1).max(600).optional()
-  },
-  async ({ firstSimPath, secondSimPath, verbosity, timeoutSeconds }) => {
-    const executablePath = await resolveExecutable("simcomp");
-    const resolvedFirstPath = asAbsolutePath(firstSimPath);
-    const resolvedSecondPath = asAbsolutePath(secondSimPath);
-
-    for (const filePath of [resolvedFirstPath, resolvedSecondPath]) {
-      if (!(await fileExists(filePath))) {
-        throw new Error(`SIM file not found: ${filePath}`);
-      }
-    }
-
-    const args = [resolvedFirstPath, resolvedSecondPath, String(verbosity ?? 1)];
-    const result = await runProcess(executablePath, args, {
-      cwd: path.dirname(resolvedFirstPath),
-      timeoutSeconds: timeoutSeconds ?? 60
-    });
-
-    return toolResponse(
-      result.ok ? "simcomp completed successfully." : "simcomp finished with errors or a non-zero exit code.",
-      {
-        executablePath,
-        firstSimPath: resolvedFirstPath,
-        secondSimPath: resolvedSecondPath,
-        args,
-        ...result
-      }
-    );
-  }
-);
-
-server.tool(
-  "export_contam_sim_text",
-  "Use this when you need to run simread on a .sim file and you already know the response-script text needed for the interactive prompts.",
-  {
-    simPath: z.string(),
-    responsesText: z.string().optional(),
-    responsesFilePath: z.string().optional(),
-    timeoutSeconds: z.number().int().min(1).max(3600).optional()
-  },
-  async ({ simPath, responsesText, responsesFilePath, timeoutSeconds }) => {
-    if (!responsesText && !responsesFilePath) {
-      throw new Error("Provide either responsesText or responsesFilePath. simread is interactive, so MCP usage must supply a response script.");
-    }
-
-    const executablePath = await resolveExecutable("simread");
-    const resolvedSimPath = asAbsolutePath(simPath);
-
-    if (!(await fileExists(resolvedSimPath))) {
-      throw new Error(`SIM file not found: ${resolvedSimPath}`);
-    }
-
-    const resolvedResponsesFilePath = responsesFilePath ? asAbsolutePath(responsesFilePath) : null;
-    const inputText =
-      responsesText ??
-      normalizeText(await readFile(resolvedResponsesFilePath, { encoding: "utf8" })).concat("\n");
-
-    const simDirectory = path.dirname(resolvedSimPath);
-    const before = await snapshotDirectory(simDirectory);
-    const result = await runProcess(executablePath, [resolvedSimPath], {
-      cwd: simDirectory,
-      timeoutSeconds: timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS,
-      stdinText: inputText.endsWith("\n") ? inputText : `${inputText}\n`
-    });
-    const after = await snapshotDirectory(simDirectory);
-
-    return toolResponse(
-      result.ok ? "simread completed successfully." : "simread finished with errors or a non-zero exit code.",
-      {
-        executablePath,
-        simPath: resolvedSimPath,
-        responsesSource: resolvedResponsesFilePath ?? "inline responsesText",
-        ...result,
-        fileChanges: diffSnapshots(before, after)
-      }
-    );
   }
 );
 

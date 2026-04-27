@@ -31,6 +31,7 @@
   "scripts": {
     "start": "node ./bin/contam-mcp.js",
     "privacy:check": "node ./contam-mcp/scripts/check-repo-privacy.mjs",
+    "regression:case-matrix": "node ./contam-mcp/scripts/regression-case-matrix.mjs",
     "regression:cottage": "node ./contam-mcp/scripts/regression-cottage.mjs",
     "regression:medium-office": "node ./contam-mcp/scripts/regression-medium-office.mjs",
     "regression:official": "npm run regression:cottage && npm run regression:medium-office"

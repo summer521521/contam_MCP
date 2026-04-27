@@ -20,6 +20,9 @@ The current server exposes stable, automation-friendly operations:
 - `inspect_contam_project`
 - `diagnose_contam_project`
 - `update_contam_project_references`
+- `create_contam_case_variant`
+- `run_contam_case_matrix`
+- `analyze_contam_text_results`
 - `start_contam_bridge_session`
 - `get_contam_bridge_session`
 - `list_contam_bridge_entities`
@@ -63,6 +66,7 @@ If startup succeeds, the process will wait for MCP traffic on `stdio`. It will n
 The repository includes two real NIST regression cases:
 
 ```powershell
+npm run regression:case-matrix
 npm run regression:cottage
 npm run regression:medium-office
 ```
@@ -189,6 +193,29 @@ Updates these `.prj` references directly:
 - `ewcFile`
 
 By default it writes a `.mcp.bak` backup next to the original project.
+
+### `create_contam_case_variant`
+
+Copies the directory containing a baseline `.prj` into a named scenario folder and optionally applies supported reference updates to the copied project.
+
+Use this to preserve a baseline model while preparing intervention cases that point to different weather, contaminant, WPC, EWC, continuous value, or discrete value files.
+
+### `run_contam_case_matrix`
+
+Creates multiple named scenario folders from one baseline `.prj` and optionally runs each case sequentially through `contamx3.exe`.
+
+This is intended for small baseline-versus-intervention studies where each case should have its own isolated output folder.
+
+### `analyze_contam_text_results`
+
+Reads a CONTAM text output, such as an `.xlog` file or a `simread` export, and returns:
+
+- non-empty preview lines
+- likely heading lines
+- numeric row count
+- simple numeric column statistics
+
+This is a generic triage helper. It does not replace a domain-specific post-processing script for final plots or paper tables.
 
 ### `run_contam_simulation`
 
@@ -356,6 +383,8 @@ simread mycase.sim < responses.txt
 ## Current Limitations
 
 - `contamw3.exe` GUI automation is not implemented.
+- full `contamp-lib`-style creation of zones, paths, schedules, and source/sink elements is not implemented
+- case matrix generation is template-based: it clones existing project folders and edits supported file references
 - `simread` response scripts still depend on CONTAM's own prompt flow.
 - bridge mode does not yet cover every possible coupling message
 - junctions do not carry original ContamW names, so junction control currently uses generated labels such as `Junction N` and `Terminal N`

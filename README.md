@@ -54,10 +54,13 @@ This avoids manually pointing a host at a local `server.js` path.
 - inspect project metadata and external file references
 - diagnose broken project references
 - update `.prj` file references
+- clone baseline projects into named scenario folders
+- create and optionally run small case matrices from one baseline project
 - run `contamx3.exe`
 - upgrade old `.prj` files with `prjup.exe`
 - compare `.sim` files with `simcomp.exe`
 - export `simread` text output
+- summarize generic CONTAM text outputs for quick result triage
 - start, inspect, advance, and close ContamX bridge sessions
 - adjust zones, junctions, ambient targets, AHS settings, and control nodes by ID or by name
 
@@ -80,6 +83,9 @@ For the full step-by-step tutorial, see:
 - `Inspect this PRJ file and summarize its references and date range.`
 - `Run a test input only check for this PRJ.`
 - `Run this PRJ and list the generated outputs.`
+- `Create baseline and intervention scenario folders from this PRJ.`
+- `Run a small case matrix from this baseline model.`
+- `Analyze this CONTAM xlog or simread text export.`
 - `Start a CONTAM bridge session for this project.`
 - `List the zones in the active bridge session.`
 - `Advance the active bridge session by 300 seconds and return path flow updates.`
