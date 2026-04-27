@@ -56,6 +56,7 @@ This avoids manually pointing a host at a local `server.js` path.
 - update `.prj` file references
 - clone baseline projects into named scenario folders
 - create and optionally run small case matrices from one baseline project
+- add generated ContamW SketchPad layout data for rectangular rooms, zone icons, path icons, and source/sink icons
 - run `contamx3.exe`
 - discover and use optional `contamxpy` bindings for paper-style ContamX API co-simulation
 - inspect API-level zones, paths, AHS, contaminants, and control nodes through `contamxpy`
@@ -88,6 +89,7 @@ For the full step-by-step tutorial, see:
 - `Run a test input only check for this PRJ.`
 - `Run this PRJ and list the generated outputs.`
 - `Create baseline and intervention scenario folders from this PRJ.`
+- `Apply a rectangular SketchPad layout to this PRJ so ContamW opens with visible rooms and icons.`
 - `Run a small case matrix from this baseline model.`
 - `Analyze this CONTAM xlog or simread text export.`
 - `Discover whether contamxpy and ANT are available.`

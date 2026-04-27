@@ -10,6 +10,7 @@
     "privacy:check": "node ./scripts/check-repo-privacy.mjs",
     "regression:contamxpy": "node ./scripts/regression-contamxpy.mjs",
     "regression:case-matrix": "node ./scripts/regression-case-matrix.mjs",
+    "regression:sketchpad-layout": "node ./scripts/regression-sketchpad-layout.mjs",
     "regression:cottage": "node ./scripts/regression-cottage.mjs",
     "regression:medium-office": "node ./scripts/regression-medium-office.mjs",
     "regression:official": "npm run regression:cottage && npm run regression:medium-office"

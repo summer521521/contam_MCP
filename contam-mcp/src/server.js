@@ -9,6 +9,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
+import { applyContamSketchpadLayout } from "./sketchpad-layout.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const workspaceRoot = path.resolve(__dirname, "..", "..");
@@ -2537,6 +2539,66 @@ const referenceUpdatesSchema = z
   })
   .strict();
 
+const sketchpadRoomSchema = z
+  .object({
+    zoneId: z.number().int(),
+    level: z.number().int().optional(),
+    left: z.number().int(),
+    top: z.number().int(),
+    right: z.number().int(),
+    bottom: z.number().int()
+  })
+  .strict();
+
+const sketchpadIconSchema = z
+  .object({
+    id: z.number().int().optional(),
+    number: z.number().int().optional(),
+    icon: z.number().int().optional(),
+    col: z.number().int(),
+    row: z.number().int()
+  })
+  .strict();
+
+const sketchpadLayoutLevelSchema = z
+  .object({
+    id: z.number().int(),
+    name: z.string().optional(),
+    refHt: z.number().optional(),
+    delHt: z.number().optional(),
+    tail: z.string().optional(),
+    rooms: z.array(sketchpadRoomSchema).optional(),
+    zoneIcons: z.array(sketchpadIconSchema).optional(),
+    pathIcons: z.array(sketchpadIconSchema).optional(),
+    sourceSinkIcons: z.array(sketchpadIconSchema).optional(),
+    icons: z.array(sketchpadIconSchema).optional()
+  })
+  .strict();
+
+const sketchpadLayoutSchema = z
+  .object({
+    sketchpadRows: z.number().int().min(1).optional(),
+    sketchpadCols: z.number().int().min(1).optional(),
+    scale: z.number().positive().optional(),
+    scaleUnit: z.number().int().min(0).max(1).optional(),
+    originRow: z.number().int().optional(),
+    originCol: z.number().int().optional(),
+    invertYAxis: z.boolean().optional(),
+    showGeometry: z.boolean().optional(),
+    includeRoomWalls: z.boolean().optional(),
+    includeRoomZoneIcons: z.boolean().optional(),
+    includeUnplacedPathIcons: z.boolean().optional(),
+    includeUnplacedSourceSinkIcons: z.boolean().optional(),
+    unplacedPathMode: z.enum(["betweenZones", "palette", "omit"]).optional(),
+    paletteLeft: z.number().int().optional(),
+    paletteRow: z.number().int().optional(),
+    paletteColStep: z.number().int().positive().optional(),
+    paletteRowStep: z.number().int().positive().optional(),
+    palettePerRow: z.number().int().positive().optional(),
+    levels: z.array(sketchpadLayoutLevelSchema).min(1)
+  })
+  .strict();
+
 const server = new McpServer({
   name: "contam-mcp",
   version: "0.1.0"
@@ -2951,6 +3013,31 @@ server.tool(
     });
 
     return toolResponse("Created CONTAM case variant.", variant);
+  }
+);
+
+server.tool(
+  "apply_contam_sketchpad_layout",
+  "Use this when you need to add or replace ContamW SketchPad icon layout data in an existing .prj so it opens with visible rooms, zone icons, airflow path icons, and source/sink icons.",
+  {
+    projectPath: z.string(),
+    outputPath: z.string().optional(),
+    createBackup: z.boolean().optional(),
+    overwrite: z.boolean().optional(),
+    allowUnknownIds: z.boolean().optional(),
+    layout: sketchpadLayoutSchema
+  },
+  async ({ projectPath, outputPath, createBackup, overwrite, allowUnknownIds, layout }) => {
+    const result = await applyContamSketchpadLayout({
+      projectPath,
+      outputPath,
+      createBackup,
+      overwrite,
+      allowUnknownIds,
+      layout
+    });
+
+    return toolResponse("Applied ContamW SketchPad layout data.", result);
   }
 );
 

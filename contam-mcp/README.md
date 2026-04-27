@@ -24,6 +24,7 @@ The current server exposes stable, automation-friendly operations:
 - `inspect_contamxpy_project`
 - `run_contamxpy_cosimulation`
 - `create_contam_case_variant`
+- `apply_contam_sketchpad_layout`
 - `run_contam_case_matrix`
 - `analyze_contam_text_results`
 - `start_contam_bridge_session`
@@ -71,6 +72,7 @@ The repository includes two real NIST regression cases:
 ```powershell
 npm run regression:contamxpy
 npm run regression:case-matrix
+npm run regression:sketchpad-layout
 npm run regression:cottage
 npm run regression:medium-office
 ```
@@ -247,6 +249,20 @@ It can apply supported adjustments before selected steps:
 Copies the directory containing a baseline `.prj` into a named scenario folder and optionally applies supported reference updates to the copied project.
 
 Use this to preserve a baseline model while preparing intervention cases that point to different weather, contaminant, WPC, EWC, continuous value, or discrete value files.
+
+### `apply_contam_sketchpad_layout`
+
+Replaces the ContamW `levels plus icon data` section of an existing `.prj` with generated SketchPad layout data.
+
+The first implementation is intentionally template-oriented. Provide rectangular rooms per level, and the tool can add:
+
+- room wall corner icons
+- zone icons bound to existing zone ids
+- airflow path icons bound to existing path ids
+- source/sink icons bound to existing source ids
+- updated SketchPad row/column dimensions and pseudo-geometry options
+
+This tool does not create simulation objects such as zones, paths, elements, contaminants, or schedules. Use it after those model records already exist in the `.prj`. For uncertain models, write to `outputPath` first and run `run_contam_simulation` with `testInputOnly: true` before editing the original file.
 
 ### `run_contam_case_matrix`
 
