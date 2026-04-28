@@ -19,6 +19,87 @@ function assertCondition(condition, message) {
   }
 }
 
+function parseFlowPathLevels(projectText) {
+  const levels = new Map();
+  const lines = projectText.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.includes("! flow paths:"));
+  if (start < 0) {
+    return levels;
+  }
+
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line === "-999") {
+      break;
+    }
+    if (!line || line.startsWith("!")) {
+      continue;
+    }
+    const tokens = line.split(/\s+/);
+    const pathId = Number(tokens[0]);
+    const level = Number(tokens[10]);
+    if (Number.isInteger(pathId) && Number.isInteger(level)) {
+      levels.set(pathId, level);
+    }
+  }
+
+  return levels;
+}
+
+function parseAirflowPathIconLevels(projectText) {
+  const icons = [];
+  const lines = projectText.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.includes("! levels plus icon data:"));
+  if (start < 0) {
+    return icons;
+  }
+
+  let currentLevel = null;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line === "-999") {
+      break;
+    }
+    if (!line || line.startsWith("!")) {
+      continue;
+    }
+
+    const tokens = line.split(/\s+/);
+    const nextLine = lines[index + 1]?.trim() ?? "";
+    if (nextLine.toLowerCase().startsWith("!icn")) {
+      currentLevel = Number(tokens[0]);
+      continue;
+    }
+
+    const icon = Number(tokens[0]);
+    const number = Number(tokens[3]);
+    if (icon === 23 && Number.isInteger(number) && number > 0 && Number.isInteger(currentLevel)) {
+      icons.push({ pathId: number, level: currentLevel });
+    }
+  }
+
+  return icons;
+}
+
+function assertAirflowPathIconsAreGuiSafe(projectText) {
+  const pathLevels = parseFlowPathLevels(projectText);
+  const iconLevels = parseAirflowPathIconLevels(projectText);
+  const seen = new Set();
+
+  for (const icon of iconLevels) {
+    assertCondition(!seen.has(icon.pathId), `Path ${icon.pathId} has duplicate SketchPad airflow path icons.`);
+    seen.add(icon.pathId);
+
+    const expectedLevel = pathLevels.get(icon.pathId);
+    if (expectedLevel !== undefined) {
+      assertCondition(
+        icon.level === expectedLevel,
+        `Path ${icon.pathId} icon is on level ${icon.level}, expected PRJ path level ${expectedLevel}.`
+      );
+    }
+  }
+}
+
 async function main() {
   await rm(workDirectory, { recursive: true, force: true });
   await mkdir(workDirectory, { recursive: true });
@@ -103,6 +184,7 @@ async function main() {
     assertCondition(projectText.includes("!icn col row  #"), "Expected SketchPad icon comments in the rewritten PRJ.");
     assertCondition(projectText.includes("  23"), "Expected airflow path icons in the rewritten PRJ.");
     assertCondition(projectText.includes("2.500e-1 0 54 7 0 0"), "Expected pseudo-geometry to be hidden in the rewritten PRJ.");
+    assertAirflowPathIconsAreGuiSafe(projectText);
 
     return {
       projectPath,

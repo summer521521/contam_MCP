@@ -855,6 +855,7 @@ function collectLayoutInputs(layout) {
 function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
   const roomByZoneId = new Map(inputs.rooms.map((room) => [room.zoneId, room]));
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+  const pathById = new Map(paths.map((pathInfo) => [pathInfo.id, pathInfo]));
   const explicitPathIds = new Set(inputs.manualPathIcons.map((icon) => icon.number));
   const explicitSourceIds = new Set(inputs.manualSourceIcons.map((icon) => icon.number));
   const iconsByLevel = new Map();
@@ -940,10 +941,24 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
     summary(icon.level).zoneIcons += 1;
   }
 
+  const placedPathIconIds = new Set();
   for (const icon of inputs.manualPathIcons) {
-    const icons = ensureLevel(icon.level);
-    addIcon(icons, occupied(icon.level), icon);
-    summary(icon.level).pathIcons += 1;
+    const pathInfo = pathById.get(icon.number);
+    const level = pathInfo?.level ?? icon.level;
+
+    if (pathInfo && pathInfo.level !== icon.level) {
+      warnings.push(`Airflow path icon ${icon.number} requested level ${icon.level}; using PRJ path level ${pathInfo.level}.`);
+    }
+
+    if (placedPathIconIds.has(icon.number)) {
+      warnings.push(`Duplicate airflow path icon ${icon.number} skipped; ContamW expects one SketchPad icon per airflow path.`);
+      continue;
+    }
+
+    placedPathIconIds.add(icon.number);
+    const icons = ensureLevel(level);
+    addIcon(icons, occupied(level), { ...icon, level });
+    summary(level).pathIcons += 1;
   }
 
   for (const icon of inputs.manualSourceIcons) {
@@ -968,7 +983,7 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
       const fromRoom = roomByZoneId.get(pathInfo.fromZone);
       const toRoom = roomByZoneId.get(pathInfo.toZone);
       const fallbackZone = zoneById.get(pathInfo.fromZone) ?? zoneById.get(pathInfo.toZone);
-      const level = fromRoom?.level ?? toRoom?.level ?? fallbackZone?.level ?? pathInfo.level ?? 1;
+      const level = pathInfo.level ?? fromRoom?.level ?? toRoom?.level ?? fallbackZone?.level ?? 1;
       let position = null;
 
       if (unplacedPathMode === "betweenZones" && fromRoom && toRoom && fromRoom.level === toRoom.level) {

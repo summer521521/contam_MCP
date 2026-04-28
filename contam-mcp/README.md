@@ -262,6 +262,7 @@ The implementation is intentionally template-oriented. Provide rooms per level a
 - source/sink icons bound to existing source ids
 - updated SketchPad row/column dimensions and pseudo-geometry options
 - optional `cleanDisplay` defaults for GUI review, which hide pseudo-geometry and move unplaced paths to an outside palette
+- airflow path level normalization, so ContamW does not need to repair path icons across levels during file open
 
 This tool does not create simulation objects such as zones, paths, elements, contaminants, or schedules. Use it after those model records already exist in the `.prj`. For uncertain models, write to `outputPath` first and run `run_contam_simulation` with `testInputOnly: true` before editing the original file.
 
