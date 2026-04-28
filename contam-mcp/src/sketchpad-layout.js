@@ -647,10 +647,13 @@ function withCleanDisplayDefaults(layout, inputs) {
     palettePerRow = Math.max(1, Math.min(palettePerRow, availableSteps + 1));
   }
 
+  const includeUnplacedPathIcons = layout.includeUnplacedPathIcons ?? false;
+
   return {
     ...layout,
     showGeometry: layout.showGeometry ?? false,
-    unplacedPathMode: layout.unplacedPathMode ?? "palette",
+    includeUnplacedPathIcons,
+    unplacedPathMode: includeUnplacedPathIcons ? layout.unplacedPathMode ?? "palette" : "omit",
     paletteLeft,
     paletteRow: layout.paletteRow ?? defaultPaletteRow,
     paletteColStep: colStep,
@@ -1122,6 +1125,7 @@ export async function applyContamSketchpadLayout({
     displayOptions: {
       cleanDisplay: resolvedLayout.cleanDisplay === true,
       showGeometry: resolvedLayout.showGeometry ?? null,
+      includeUnplacedPathIcons: resolvedLayout.includeUnplacedPathIcons ?? true,
       unplacedPathMode: resolvedLayout.unplacedPathMode ?? "betweenZones",
       paletteLeft: resolvedLayout.paletteLeft ?? null,
       paletteRow: resolvedLayout.paletteRow ?? null,
