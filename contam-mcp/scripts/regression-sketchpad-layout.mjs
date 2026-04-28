@@ -130,6 +130,7 @@ async function main() {
           originRow: 54,
           originCol: 7,
           cleanDisplay: true,
+          hideAirflowPathIcons: true,
           levels: [
             {
               id: 1,
@@ -162,6 +163,7 @@ async function main() {
     assertCondition(applied.structuredContent.backupCreated === true, "Expected an in-place backup to be created.");
     assertCondition(applied.structuredContent.displayOptions.cleanDisplay === true, "Expected clean display defaults.");
     assertCondition(applied.structuredContent.displayOptions.showGeometry === false, "Expected clean display to hide pseudo-geometry.");
+    assertCondition(applied.structuredContent.displayOptions.hideAirflowPathIcons === true, "Expected airflow path icons to be hidden.");
     assertCondition(applied.structuredContent.displayOptions.includeUnplacedPathIcons === false, "Expected clean display to hide unplaced path icons.");
     assertCondition(applied.structuredContent.displayOptions.unplacedPathMode === "omit", "Expected clean display to omit unplaced path icons.");
 
@@ -188,10 +190,9 @@ async function main() {
 
     const projectText = await readFile(projectPath, "utf8");
     assertCondition(projectText.includes("!icn col row  #"), "Expected SketchPad icon comments in the rewritten PRJ.");
-    assertCondition(projectText.includes("  23"), "Expected airflow path icons in the rewritten PRJ.");
     assertCondition(projectText.includes("2.500e-1 0 54 7 0 0"), "Expected pseudo-geometry to be hidden in the rewritten PRJ.");
     const pathIcons = assertAirflowPathIconsAreGuiSafe(projectText);
-    assertCondition(pathIcons.length === 1, "Expected only explicitly placed airflow path icons in clean display mode.");
+    assertCondition(pathIcons.length === 0, "Expected all SketchPad airflow path icons to be hidden.");
 
     return {
       projectPath,

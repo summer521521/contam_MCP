@@ -647,11 +647,13 @@ function withCleanDisplayDefaults(layout, inputs) {
     palettePerRow = Math.max(1, Math.min(palettePerRow, availableSteps + 1));
   }
 
-  const includeUnplacedPathIcons = layout.includeUnplacedPathIcons ?? false;
+  const hideAirflowPathIcons = layout.hideAirflowPathIcons ?? false;
+  const includeUnplacedPathIcons = hideAirflowPathIcons ? false : layout.includeUnplacedPathIcons ?? false;
 
   return {
     ...layout,
     showGeometry: layout.showGeometry ?? false,
+    hideAirflowPathIcons,
     includeUnplacedPathIcons,
     unplacedPathMode: includeUnplacedPathIcons ? layout.unplacedPathMode ?? "palette" : "omit",
     paletteLeft,
@@ -945,23 +947,25 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
   }
 
   const placedPathIconIds = new Set();
-  for (const icon of inputs.manualPathIcons) {
-    const pathInfo = pathById.get(icon.number);
-    const level = pathInfo?.level ?? icon.level;
+  if (layout.hideAirflowPathIcons !== true) {
+    for (const icon of inputs.manualPathIcons) {
+      const pathInfo = pathById.get(icon.number);
+      const level = pathInfo?.level ?? icon.level;
 
-    if (pathInfo && pathInfo.level !== icon.level) {
-      warnings.push(`Airflow path icon ${icon.number} requested level ${icon.level}; using PRJ path level ${pathInfo.level}.`);
+      if (pathInfo && pathInfo.level !== icon.level) {
+        warnings.push(`Airflow path icon ${icon.number} requested level ${icon.level}; using PRJ path level ${pathInfo.level}.`);
+      }
+
+      if (placedPathIconIds.has(icon.number)) {
+        warnings.push(`Duplicate airflow path icon ${icon.number} skipped; ContamW expects one SketchPad icon per airflow path.`);
+        continue;
+      }
+
+      placedPathIconIds.add(icon.number);
+      const icons = ensureLevel(level);
+      addIcon(icons, occupied(level), { ...icon, level });
+      summary(level).pathIcons += 1;
     }
-
-    if (placedPathIconIds.has(icon.number)) {
-      warnings.push(`Duplicate airflow path icon ${icon.number} skipped; ContamW expects one SketchPad icon per airflow path.`);
-      continue;
-    }
-
-    placedPathIconIds.add(icon.number);
-    const icons = ensureLevel(level);
-    addIcon(icons, occupied(level), { ...icon, level });
-    summary(level).pathIcons += 1;
   }
 
   for (const icon of inputs.manualSourceIcons) {
@@ -976,7 +980,7 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
     summary(icon.level).extraIcons += 1;
   }
 
-  if (layout.includeUnplacedPathIcons !== false && unplacedPathMode !== "omit") {
+  if (layout.hideAirflowPathIcons !== true && layout.includeUnplacedPathIcons !== false && unplacedPathMode !== "omit") {
     const paletteCountsByLevel = new Map();
     for (const pathInfo of paths) {
       if (explicitPathIds.has(pathInfo.id)) {
@@ -1125,6 +1129,7 @@ export async function applyContamSketchpadLayout({
     displayOptions: {
       cleanDisplay: resolvedLayout.cleanDisplay === true,
       showGeometry: resolvedLayout.showGeometry ?? null,
+      hideAirflowPathIcons: resolvedLayout.hideAirflowPathIcons ?? false,
       includeUnplacedPathIcons: resolvedLayout.includeUnplacedPathIcons ?? true,
       unplacedPathMode: resolvedLayout.unplacedPathMode ?? "betweenZones",
       paletteLeft: resolvedLayout.paletteLeft ?? null,

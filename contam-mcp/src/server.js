@@ -2606,6 +2606,7 @@ const sketchpadLayoutSchema = z
     includeRoomZoneIcons: z.boolean().optional(),
     includeUnplacedPathIcons: z.boolean().optional(),
     includeUnplacedSourceSinkIcons: z.boolean().optional(),
+    hideAirflowPathIcons: z.boolean().optional(),
     unplacedPathMode: z.enum(["betweenZones", "palette", "omit"]).optional(),
     paletteLeft: z.number().int().optional(),
     paletteRow: z.number().int().optional(),
