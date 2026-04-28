@@ -2601,6 +2601,7 @@ const sketchpadLayoutSchema = z
     originCol: z.number().int().optional(),
     invertYAxis: z.boolean().optional(),
     showGeometry: z.boolean().optional(),
+    cleanDisplay: z.boolean().optional(),
     includeRoomWalls: z.boolean().optional(),
     includeRoomZoneIcons: z.boolean().optional(),
     includeUnplacedPathIcons: z.boolean().optional(),

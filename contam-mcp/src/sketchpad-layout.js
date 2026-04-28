@@ -608,6 +608,57 @@ function buildPalettePosition(index, layout) {
   };
 }
 
+function roomBounds(rooms) {
+  if (rooms.length === 0) {
+    return null;
+  }
+
+  let minCol = Number.POSITIVE_INFINITY;
+  let minRow = Number.POSITIVE_INFINITY;
+  let maxCol = Number.NEGATIVE_INFINITY;
+  let maxRow = Number.NEGATIVE_INFINITY;
+
+  for (const room of rooms) {
+    for (const point of roomToPolygon(room)) {
+      minCol = Math.min(minCol, point.col);
+      minRow = Math.min(minRow, point.row);
+      maxCol = Math.max(maxCol, point.col);
+      maxRow = Math.max(maxRow, point.row);
+    }
+  }
+
+  return { minCol, minRow, maxCol, maxRow };
+}
+
+function withCleanDisplayDefaults(layout, inputs) {
+  if (!layout.cleanDisplay) {
+    return layout;
+  }
+
+  const bounds = roomBounds(inputs.rooms);
+  const colStep = layout.paletteColStep ?? 5;
+  const defaultPaletteLeft = bounds ? bounds.maxCol + 6 : Math.max(8, Math.floor((layout.sketchpadCols ?? 72) * 0.55));
+  const defaultPaletteRow = bounds ? bounds.maxRow + 5 : Math.max(4, Math.floor((layout.sketchpadRows ?? 58) * 0.65));
+  const paletteLeft = layout.paletteLeft ?? defaultPaletteLeft;
+  let palettePerRow = layout.palettePerRow ?? 9;
+
+  if (layout.palettePerRow === undefined && layout.sketchpadCols !== undefined) {
+    const availableSteps = Math.floor(Math.max(0, layout.sketchpadCols - 2 - paletteLeft) / colStep);
+    palettePerRow = Math.max(1, Math.min(palettePerRow, availableSteps + 1));
+  }
+
+  return {
+    ...layout,
+    showGeometry: layout.showGeometry ?? false,
+    unplacedPathMode: layout.unplacedPathMode ?? "palette",
+    paletteLeft,
+    paletteRow: layout.paletteRow ?? defaultPaletteRow,
+    paletteColStep: colStep,
+    paletteRowStep: layout.paletteRowStep ?? 3,
+    palettePerRow
+  };
+}
+
 function normalizeRequestedLevels(layout, existingLevels, zones) {
   const levelsById = new Map(existingLevels.map((level) => [level.id, level]));
 
@@ -1002,6 +1053,7 @@ export async function applyContamSketchpadLayout({
   const sourceSinks = parseProjectSourceSinks(lines, zoneById);
   const sourceById = new Map(sourceSinks.map((item) => [item.id, item]));
   const inputs = collectLayoutInputs(layout ?? {});
+  const resolvedLayout = withCleanDisplayDefaults(layout ?? {}, inputs);
   const warnings = validateKnownIds({
     rooms: inputs.rooms,
     manualZoneIcons: inputs.manualZoneIcons,
@@ -1013,9 +1065,9 @@ export async function applyContamSketchpadLayout({
     allowUnknownIds
   });
 
-  const levels = normalizeRequestedLevels(layout ?? {}, existingLevels, zones);
+  const levels = normalizeRequestedLevels(resolvedLayout, existingLevels, zones);
   const { iconsByLevel, summariesByLevel, warnings: layoutWarnings } = buildSketchpadIcons({
-    layout: layout ?? {},
+    layout: resolvedLayout,
     zones,
     paths,
     sourceSinks,
@@ -1025,7 +1077,7 @@ export async function applyContamSketchpadLayout({
   const replacement = buildLevelsSection(levels, iconsByLevel);
 
   lines.splice(section.headerIndex, section.endIndex - section.headerIndex + 1, ...replacement);
-  updateSketchpadSize(lines, layout ?? {}, allGeneratedIcons);
+  updateSketchpadSize(lines, resolvedLayout, allGeneratedIcons);
 
   if (resolvedOutputPath === resolvedProjectPath && createBackup) {
     const backupPath = `${resolvedProjectPath}.sketchpad.bak`;
@@ -1052,6 +1104,16 @@ export async function applyContamSketchpadLayout({
       ...summary,
       totalIcons: (iconsByLevel.get(level) ?? []).length
     })),
+    displayOptions: {
+      cleanDisplay: resolvedLayout.cleanDisplay === true,
+      showGeometry: resolvedLayout.showGeometry ?? null,
+      unplacedPathMode: resolvedLayout.unplacedPathMode ?? "betweenZones",
+      paletteLeft: resolvedLayout.paletteLeft ?? null,
+      paletteRow: resolvedLayout.paletteRow ?? null,
+      paletteColStep: resolvedLayout.paletteColStep ?? null,
+      paletteRowStep: resolvedLayout.paletteRowStep ?? null,
+      palettePerRow: resolvedLayout.palettePerRow ?? null
+    },
     warnings: [...warnings, ...layoutWarnings]
   };
 }

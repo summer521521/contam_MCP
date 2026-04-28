@@ -261,6 +261,7 @@ The implementation is intentionally template-oriented. Provide rooms per level a
 - airflow path icons bound to existing path ids
 - source/sink icons bound to existing source ids
 - updated SketchPad row/column dimensions and pseudo-geometry options
+- optional `cleanDisplay` defaults for GUI review, which hide pseudo-geometry and move unplaced paths to an outside palette
 
 This tool does not create simulation objects such as zones, paths, elements, contaminants, or schedules. Use it after those model records already exist in the `.prj`. For uncertain models, write to `outputPath` first and run `run_contam_simulation` with `testInputOnly: true` before editing the original file.
 
@@ -271,7 +272,8 @@ Suggested sketch-to-PRJ workflow:
 3. Encode normal rooms as `left/top/right/bottom`; encode non-rectangular rooms as clockwise `polygon` points.
 4. Add explicit `pathIcons` for doors, windows, stair connections, supply openings, exhaust openings, or pollutant sources that should appear at specific walls.
 5. Leave helper or uncertain paths to the palette area so they remain selectable without cluttering the floor plan.
-6. Run `testInputOnly` and then manually open the result in ContamW for final SketchPad checks.
+6. For a clean ContamW screenshot/check, set `cleanDisplay: true`; override `paletteLeft`, `paletteRow`, or `showGeometry` only when needed.
+7. Run `testInputOnly` and then manually open the result in ContamW for final SketchPad checks.
 
 ### `run_contam_case_matrix`
 

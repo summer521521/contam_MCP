@@ -42,12 +42,11 @@ async function main() {
         createBackup: true,
         layout: {
           sketchpadRows: 64,
-          sketchpadCols: 72,
+          sketchpadCols: 96,
           scale: 0.25,
           originRow: 54,
           originCol: 7,
-          showGeometry: true,
-          unplacedPathMode: "palette",
+          cleanDisplay: true,
           levels: [
             {
               id: 1,
@@ -75,6 +74,9 @@ async function main() {
     assertCondition(!applied.isError, "apply_contam_sketchpad_layout returned an MCP error.");
     assertCondition(applied.structuredContent.counts.generatedIcons >= 100, "Expected generated SketchPad icons.");
     assertCondition(applied.structuredContent.backupCreated === true, "Expected an in-place backup to be created.");
+    assertCondition(applied.structuredContent.displayOptions.cleanDisplay === true, "Expected clean display defaults.");
+    assertCondition(applied.structuredContent.displayOptions.showGeometry === false, "Expected clean display to hide pseudo-geometry.");
+    assertCondition(applied.structuredContent.displayOptions.unplacedPathMode === "palette", "Expected clean display to use a palette.");
 
     const inspected = await client.callTool({
       name: "inspect_contam_project",
@@ -100,6 +102,7 @@ async function main() {
     const projectText = await readFile(projectPath, "utf8");
     assertCondition(projectText.includes("!icn col row  #"), "Expected SketchPad icon comments in the rewritten PRJ.");
     assertCondition(projectText.includes("  23"), "Expected airflow path icons in the rewritten PRJ.");
+    assertCondition(projectText.includes("2.500e-1 0 54 7 0 0"), "Expected pseudo-geometry to be hidden in the rewritten PRJ.");
 
     return {
       projectPath,
