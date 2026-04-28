@@ -53,7 +53,7 @@ async function main() {
               id: 1,
               name: "first",
               rooms: [
-                { zoneId: 2, left: 8, top: 10, right: 24, bottom: 28 },
+                { zoneId: 2, polygon: [{ col: 8, row: 10 }, { col: 24, row: 10 }, { col: 24, row: 28 }, { col: 8, row: 28 }] },
                 { zoneId: 3, left: 24, top: 10, right: 46, bottom: 28 },
                 { zoneId: 4, left: 8, top: 28, right: 24, bottom: 46 },
                 { zoneId: 5, left: 24, top: 28, right: 46, bottom: 46 },

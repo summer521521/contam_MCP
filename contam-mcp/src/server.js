@@ -2539,14 +2539,29 @@ const referenceUpdatesSchema = z
   })
   .strict();
 
+const sketchpadPointSchema = z
+  .object({
+    col: z.number().int(),
+    row: z.number().int()
+  })
+  .strict();
+
 const sketchpadRoomSchema = z
   .object({
     zoneId: z.number().int(),
     level: z.number().int().optional(),
-    left: z.number().int(),
-    top: z.number().int(),
-    right: z.number().int(),
-    bottom: z.number().int()
+    left: z.number().int().optional(),
+    top: z.number().int().optional(),
+    right: z.number().int().optional(),
+    bottom: z.number().int().optional(),
+    polygon: z.array(sketchpadPointSchema).min(4).optional()
+  })
+  .strict();
+
+const sketchpadWallSegmentSchema = z
+  .object({
+    from: sketchpadPointSchema,
+    to: sketchpadPointSchema
   })
   .strict();
 
@@ -2568,6 +2583,7 @@ const sketchpadLayoutLevelSchema = z
     delHt: z.number().optional(),
     tail: z.string().optional(),
     rooms: z.array(sketchpadRoomSchema).optional(),
+    wallSegments: z.array(sketchpadWallSegmentSchema).optional(),
     zoneIcons: z.array(sketchpadIconSchema).optional(),
     pathIcons: z.array(sketchpadIconSchema).optional(),
     sourceSinkIcons: z.array(sketchpadIconSchema).optional(),

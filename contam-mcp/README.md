@@ -254,15 +254,24 @@ Use this to preserve a baseline model while preparing intervention cases that po
 
 Replaces the ContamW `levels plus icon data` section of an existing `.prj` with generated SketchPad layout data.
 
-The first implementation is intentionally template-oriented. Provide rectangular rooms per level, and the tool can add:
+The implementation is intentionally template-oriented. Provide rooms per level as rectangles or orthogonal polygons, or add explicit wall segments when a user sketch has jogs, offsets, or shared partitions. The tool can add:
 
-- room wall corner icons
+- wall corner, tee, and cross icons inferred from the wall graph
 - zone icons bound to existing zone ids
 - airflow path icons bound to existing path ids
 - source/sink icons bound to existing source ids
 - updated SketchPad row/column dimensions and pseudo-geometry options
 
 This tool does not create simulation objects such as zones, paths, elements, contaminants, or schedules. Use it after those model records already exist in the `.prj`. For uncertain models, write to `outputPath` first and run `run_contam_simulation` with `testInputOnly: true` before editing the original file.
+
+Suggested sketch-to-PRJ workflow:
+
+1. Convert the user's verbal description, hand sketch, paper plan, or screenshot into a small layout specification.
+2. Pick a SketchPad scale, for example 0.25 m per cell, and map measured or estimated room coordinates onto integer `col,row` cells.
+3. Encode normal rooms as `left/top/right/bottom`; encode non-rectangular rooms as clockwise `polygon` points.
+4. Add explicit `pathIcons` for doors, windows, stair connections, supply openings, exhaust openings, or pollutant sources that should appear at specific walls.
+5. Leave helper or uncertain paths to the palette area so they remain selectable without cluttering the floor plan.
+6. Run `testInputOnly` and then manually open the result in ContamW for final SketchPad checks.
 
 ### `run_contam_case_matrix`
 

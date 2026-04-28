@@ -5,7 +5,12 @@ const DEFAULT_WALL_ICON = {
   topLeft: 14,
   topRight: 15,
   bottomRight: 16,
-  bottomLeft: 17
+  bottomLeft: 17,
+  teeRight: 18,
+  teeDown: 19,
+  teeLeft: 20,
+  teeUp: 21,
+  cross: 22
 };
 const ZONE_ICON = 5;
 const AIRFLOW_PATH_ICON = 23;
@@ -264,18 +269,33 @@ function normalizeInteger(value, fieldName) {
   return number;
 }
 
+function normalizePoint(point, fieldName) {
+  return {
+    col: normalizeInteger(point.col, `${fieldName}.col`),
+    row: normalizeInteger(point.row, `${fieldName}.row`)
+  };
+}
+
 function normalizeRoom(room) {
   const normalized = {
     zoneId: normalizeInteger(room.zoneId, "room.zoneId"),
-    level: normalizeInteger(room.level, "room.level"),
-    left: normalizeInteger(room.left, "room.left"),
-    top: normalizeInteger(room.top, "room.top"),
-    right: normalizeInteger(room.right, "room.right"),
-    bottom: normalizeInteger(room.bottom, "room.bottom")
+    level: normalizeInteger(room.level, "room.level")
   };
 
-  if (normalized.left >= normalized.right || normalized.top >= normalized.bottom) {
-    throw new Error(`Room for zone ${normalized.zoneId} must have left < right and top < bottom.`);
+  if (Array.isArray(room.polygon)) {
+    if (room.polygon.length < 4) {
+      throw new Error(`Room polygon for zone ${normalized.zoneId} must contain at least four points.`);
+    }
+    normalized.polygon = room.polygon.map((point, index) => normalizePoint(point, `room.polygon[${index}]`));
+  } else {
+    normalized.left = normalizeInteger(room.left, "room.left");
+    normalized.top = normalizeInteger(room.top, "room.top");
+    normalized.right = normalizeInteger(room.right, "room.right");
+    normalized.bottom = normalizeInteger(room.bottom, "room.bottom");
+
+    if (normalized.left >= normalized.right || normalized.top >= normalized.bottom) {
+      throw new Error(`Room for zone ${normalized.zoneId} must have left < right and top < bottom.`);
+    }
   }
 
   return normalized;
@@ -291,6 +311,15 @@ function normalizeIcon(icon, defaultIcon, fieldName) {
 }
 
 function centerOfRoom(room) {
+  if (room.polygon) {
+    const colSum = room.polygon.reduce((sum, point) => sum + point.col, 0);
+    const rowSum = room.polygon.reduce((sum, point) => sum + point.row, 0);
+    return {
+      col: Math.round(colSum / room.polygon.length),
+      row: Math.round(rowSum / room.polygon.length)
+    };
+  }
+
   return {
     col: Math.round((room.left + room.right) / 2),
     row: Math.round((room.top + room.bottom) / 2)
@@ -298,6 +327,18 @@ function centerOfRoom(room) {
 }
 
 function topEdgeOfRoom(room, ordinal = 0) {
+  if (room.polygon) {
+    const minRow = Math.min(...room.polygon.map((point) => point.row));
+    const topPoints = room.polygon.filter((point) => point.row === minRow).sort((left, right) => left.col - right.col);
+    const left = topPoints[0]?.col ?? centerOfRoom(room).col;
+    const right = topPoints[topPoints.length - 1]?.col ?? left + 1;
+    const width = Math.max(1, right - left);
+    return {
+      col: Math.min(right - 1, left + 1 + (ordinal % Math.max(1, width - 1))),
+      row: minRow
+    };
+  }
+
   const width = Math.max(1, room.right - room.left);
   const col = Math.min(room.right - 1, room.left + 1 + (ordinal % Math.max(1, width - 1)));
   return {
@@ -387,13 +428,171 @@ function addWallIcon(icons, wallSet, icon) {
   icons.push(icon);
 }
 
-function buildRoomWallIcons(room) {
+function roomToPolygon(room) {
+  if (room.polygon) {
+    return room.polygon;
+  }
+
   return [
-    { icon: DEFAULT_WALL_ICON.topLeft, col: room.left, row: room.top, number: 0 },
-    { icon: DEFAULT_WALL_ICON.topRight, col: room.right, row: room.top, number: 0 },
-    { icon: DEFAULT_WALL_ICON.bottomLeft, col: room.left, row: room.bottom, number: 0 },
-    { icon: DEFAULT_WALL_ICON.bottomRight, col: room.right, row: room.bottom, number: 0 }
+    { col: room.left, row: room.top },
+    { col: room.right, row: room.top },
+    { col: room.right, row: room.bottom },
+    { col: room.left, row: room.bottom }
   ];
+}
+
+function normalizeWallSegment(segment, fieldName) {
+  const from = normalizePoint(segment.from, `${fieldName}.from`);
+  const to = normalizePoint(segment.to, `${fieldName}.to`);
+  if (from.col !== to.col && from.row !== to.row) {
+    throw new Error(`${fieldName} must be horizontal or vertical.`);
+  }
+  if (from.col === to.col && from.row === to.row) {
+    throw new Error(`${fieldName} must not have identical endpoints.`);
+  }
+  return {
+    from,
+    to
+  };
+}
+
+function polygonToWallSegments(polygon, fieldName) {
+  const segments = [];
+  for (let index = 0; index < polygon.length; index += 1) {
+    const from = polygon[index];
+    const to = polygon[(index + 1) % polygon.length];
+    segments.push(normalizeWallSegment({ from, to }, `${fieldName}[${index}]`));
+  }
+  return segments;
+}
+
+function isPointOnSegment(point, segment) {
+  const minCol = Math.min(segment.from.col, segment.to.col);
+  const maxCol = Math.max(segment.from.col, segment.to.col);
+  const minRow = Math.min(segment.from.row, segment.to.row);
+  const maxRow = Math.max(segment.from.row, segment.to.row);
+  return point.col >= minCol && point.col <= maxCol && point.row >= minRow && point.row <= maxRow;
+}
+
+function segmentOrientation(segment) {
+  return segment.from.row === segment.to.row ? "horizontal" : "vertical";
+}
+
+function splitWallSegments(rawSegments) {
+  const splitSegments = [];
+  const normalizedSegments = rawSegments.map((segment, index) => ({
+    ...normalizeWallSegment(segment, `wallSegments[${index}]`),
+    index
+  }));
+
+  for (const segment of normalizedSegments) {
+    const splitPoints = [segment.from, segment.to];
+
+    for (const other of normalizedSegments) {
+      if (other.index === segment.index) {
+        continue;
+      }
+
+      for (const endpoint of [other.from, other.to]) {
+        if (isPointOnSegment(endpoint, segment)) {
+          splitPoints.push(endpoint);
+        }
+      }
+
+      if (segmentOrientation(segment) !== segmentOrientation(other)) {
+        const horizontal = segmentOrientation(segment) === "horizontal" ? segment : other;
+        const vertical = segmentOrientation(segment) === "vertical" ? segment : other;
+        const intersection = { col: vertical.from.col, row: horizontal.from.row };
+        if (isPointOnSegment(intersection, horizontal) && isPointOnSegment(intersection, vertical)) {
+          splitPoints.push(intersection);
+        }
+      }
+    }
+
+    const uniquePoints = [...new Map(splitPoints.map((point) => [`${point.col}:${point.row}`, point])).values()].sort(
+      (left, right) => left.col - right.col || left.row - right.row
+    );
+    const ordered =
+      segmentOrientation(segment) === "horizontal"
+        ? uniquePoints.sort((left, right) => left.col - right.col)
+        : uniquePoints.sort((left, right) => left.row - right.row);
+
+    for (let index = 0; index < ordered.length - 1; index += 1) {
+      const from = ordered[index];
+      const to = ordered[index + 1];
+      if (from.col !== to.col || from.row !== to.row) {
+        splitSegments.push({ from, to });
+      }
+    }
+  }
+
+  return splitSegments;
+}
+
+function addDirection(directions, from, to) {
+  if (to.col > from.col) {
+    directions.add("right");
+  } else if (to.col < from.col) {
+    directions.add("left");
+  } else if (to.row > from.row) {
+    directions.add("down");
+  } else if (to.row < from.row) {
+    directions.add("up");
+  }
+}
+
+function wallIconForDirections(directions) {
+  const key = ["left", "right", "up", "down"].filter((direction) => directions.has(direction)).join(",");
+  const icons = {
+    "right,down": DEFAULT_WALL_ICON.topLeft,
+    "left,down": DEFAULT_WALL_ICON.topRight,
+    "left,up": DEFAULT_WALL_ICON.bottomRight,
+    "right,up": DEFAULT_WALL_ICON.bottomLeft,
+    "right,up,down": DEFAULT_WALL_ICON.teeRight,
+    "left,right,down": DEFAULT_WALL_ICON.teeDown,
+    "left,up,down": DEFAULT_WALL_ICON.teeLeft,
+    "left,right,up": DEFAULT_WALL_ICON.teeUp,
+    "left,right,up,down": DEFAULT_WALL_ICON.cross
+  };
+
+  return icons[key] ?? null;
+}
+
+function buildWallGraphIcons(rawSegments) {
+  const graph = new Map();
+  const splitSegments = splitWallSegments(rawSegments);
+
+  for (const segment of splitSegments) {
+    const fromKey = `${segment.from.col}:${segment.from.row}`;
+    const toKey = `${segment.to.col}:${segment.to.row}`;
+    if (!graph.has(fromKey)) {
+      graph.set(fromKey, { point: segment.from, directions: new Set() });
+    }
+    if (!graph.has(toKey)) {
+      graph.set(toKey, { point: segment.to, directions: new Set() });
+    }
+    addDirection(graph.get(fromKey).directions, segment.from, segment.to);
+    addDirection(graph.get(toKey).directions, segment.to, segment.from);
+  }
+
+  const icons = [];
+  const warnings = [];
+
+  for (const node of graph.values()) {
+    const icon = wallIconForDirections(node.directions);
+    if (icon) {
+      icons.push({
+        icon,
+        col: node.point.col,
+        row: node.point.row,
+        number: 0
+      });
+    } else if (node.directions.size === 1) {
+      warnings.push(`Open wall endpoint at col ${node.point.col}, row ${node.point.row}.`);
+    }
+  }
+
+  return { icons, warnings };
 }
 
 function buildPalettePosition(index, layout) {
@@ -570,6 +769,13 @@ function collectLayoutInputs(layout) {
     for (const room of level.rooms ?? []) {
       rooms.push(normalizeRoom({ ...room, level: room.level ?? levelId }));
     }
+    for (const segment of level.wallSegments ?? []) {
+      extraIcons.push({
+        level: levelId,
+        kind: "wallSegment",
+        ...normalizeWallSegment(segment, "wallSegment")
+      });
+    }
     for (const icon of level.zoneIcons ?? []) {
       manualZoneIcons.push({ level: levelId, ...normalizeIcon(icon, ZONE_ICON, "zoneIcon") });
     }
@@ -589,7 +795,9 @@ function collectLayoutInputs(layout) {
     manualZoneIcons,
     manualPathIcons,
     manualSourceIcons,
-    extraIcons
+    extraIcons,
+    wallSegments: extraIcons.filter((icon) => icon.kind === "wallSegment"),
+    displayExtraIcons: extraIcons.filter((icon) => icon.kind !== "wallSegment")
   };
 }
 
@@ -600,6 +808,7 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
   const explicitSourceIds = new Set(inputs.manualSourceIcons.map((icon) => icon.number));
   const iconsByLevel = new Map();
   const summariesByLevel = new Map();
+  const warnings = [];
   const unplacedPathMode = layout.unplacedPathMode ?? "betweenZones";
 
   function ensureLevel(levelId) {
@@ -637,11 +846,25 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
   }
 
   if (layout.includeRoomWalls !== false) {
+    const wallSegmentsByLevel = new Map();
     for (const room of inputs.rooms) {
-      const icons = ensureLevel(room.level);
-      for (const wallIcon of buildRoomWallIcons(room)) {
-        addWallIcon(icons, wallSet(room.level), wallIcon);
-        summary(room.level).wallIcons += 1;
+      const segments = polygonToWallSegments(roomToPolygon(room), `room ${room.zoneId} polygon`);
+      wallSegmentsByLevel.set(room.level, [...(wallSegmentsByLevel.get(room.level) ?? []), ...segments]);
+    }
+    for (const segment of inputs.wallSegments ?? []) {
+      wallSegmentsByLevel.set(segment.level, [
+        ...(wallSegmentsByLevel.get(segment.level) ?? []),
+        { from: segment.from, to: segment.to }
+      ]);
+    }
+
+    for (const [level, segments] of wallSegmentsByLevel.entries()) {
+      const icons = ensureLevel(level);
+      const graph = buildWallGraphIcons(segments);
+      warnings.push(...graph.warnings);
+      for (const wallIcon of graph.icons) {
+        addWallIcon(icons, wallSet(level), wallIcon);
+        summary(level).wallIcons += 1;
       }
     }
   }
@@ -678,7 +901,7 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
     summary(icon.level).sourceSinkIcons += 1;
   }
 
-  for (const icon of inputs.extraIcons) {
+  for (const icon of inputs.displayExtraIcons) {
     const icons = ensureLevel(icon.level);
     addIcon(icons, occupied(icon.level), icon);
     summary(icon.level).extraIcons += 1;
@@ -743,7 +966,8 @@ function buildSketchpadIcons({ layout, zones, paths, sourceSinks, inputs }) {
 
   return {
     iconsByLevel,
-    summariesByLevel
+    summariesByLevel,
+    warnings
   };
 }
 
@@ -790,7 +1014,7 @@ export async function applyContamSketchpadLayout({
   });
 
   const levels = normalizeRequestedLevels(layout ?? {}, existingLevels, zones);
-  const { iconsByLevel, summariesByLevel } = buildSketchpadIcons({
+  const { iconsByLevel, summariesByLevel, warnings: layoutWarnings } = buildSketchpadIcons({
     layout: layout ?? {},
     zones,
     paths,
@@ -828,6 +1052,6 @@ export async function applyContamSketchpadLayout({
       ...summary,
       totalIcons: (iconsByLevel.get(level) ?? []).length
     })),
-    warnings
+    warnings: [...warnings, ...layoutWarnings]
   };
 }
