@@ -1,10 +1,16 @@
-name: CONTAM MCP Regression
+name: CONTAM Plugin Regression
 
 on:
   push:
     paths:
       - ".github/workflows/contam-mcp-regression.yml"
+      - ".codex-plugin/**"
+      - ".mcp.json"
       - "contam-mcp/**"
+      - "skills/**"
+      - "scripts/**"
+      - "docs/**"
+      - "package.json"
       - "contamx3.exe"
       - "contamw3.exe"
       - "prjup.exe"
@@ -14,7 +20,13 @@ on:
   pull_request:
     paths:
       - ".github/workflows/contam-mcp-regression.yml"
+      - ".codex-plugin/**"
+      - ".mcp.json"
       - "contam-mcp/**"
+      - "skills/**"
+      - "scripts/**"
+      - "docs/**"
+      - "package.json"
       - "contamx3.exe"
       - "contamw3.exe"
       - "prjup.exe"
@@ -65,6 +77,9 @@ jobs:
         working-directory: contam-mcp
         run: npm run privacy:check
 
+      - name: Check plugin launcher
+        run: npm run plugin:check
+
       - name: Download official NIST regression cases
         run: |
           New-Item -ItemType Directory -Force .\tmp\nist-cases | Out-Null
@@ -100,7 +115,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: contam-mcp-regression-artifacts
+          name: contam-plugin-regression-artifacts
           path: tmp/ci-artifacts/**
           if-no-files-found: warn
           retention-days: 14

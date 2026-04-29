@@ -1,65 +1,54 @@
 # Codex Windows App Setup
 
-This guide shows how to add `CONTAM MCP` through the Codex Windows App MCP server UI.
+This guide shows how to add `CONTAM_plugin` through the Codex Windows App MCP server UI.
 
-## Recommended Setup
+## Recommended npx Setup
 
-Use the GitHub-backed `npx` launcher.
+Add a local MCP server with:
 
-Fill the form like this:
-
-- **Server name**: `Contam MCP`
-- **Launch command**: `npx`
-- **Arguments**:
+- command: `npx`
+- args:
   - `-y`
   - `--package`
-  - `github:summer521521/contam_MCP`
+  - `github:summer521521/CONTAM_plugin`
   - `contam-mcp`
-- **Environment variables**: leave empty unless you want to point to another CONTAM installation
-- **Pass-through environment variables**: leave empty
-- **Working directory**: any stable local folder is fine; if you are unsure, use your normal code workspace
 
-## Why This Is the Recommended Option
+Restart Codex after saving the MCP server.
 
-This setup:
+## Local Clone Setup
 
-- avoids hard-coding a local `server.js` path
-- avoids asking users to manually clone the repository first
-- keeps the connection flow close to a one-click install experience
+If you cloned this repository, use:
 
-## Optional Local Clone Setup
+- command: `powershell.exe`
+- args:
+  - `-NoProfile`
+  - `-ExecutionPolicy`
+  - `Bypass`
+  - `-File`
+  - `<repo-root>\scripts\start-contam-plugin-mcp.ps1`
 
-If you prefer to clone the repository and launch the server directly, fill the form like this:
+## Optional contam_chinese Link
 
-- **Launch command**: `node`
-- **Arguments**:
-  - `<repo-root>\contam-mcp\src\server.js`
-- **Environment variables**: optional
-- **Pass-through environment variables**: leave empty
-- **Working directory**: `<repo-root>`
+If you want Codex to use localized executables from `contam_chinese`, extract a release package and run:
 
-## Optional CONTAM Environment Variables
+```powershell
+.\scripts\link-contam-chinese.ps1 -Path "<extracted-contam-chinese-release>" -User
+```
 
-If you want the server to use a different CONTAM installation instead of the bundled binaries, you can add one or more of these:
+Restart Codex after setting `CONTAM_CHINESE_HOME`.
 
-- `CONTAM_HOME`
-- `CONTAMX_PATH`
-- `CONTAMW_PATH`
-- `PRJUP_PATH`
-- `SIMREAD_PATH`
-- `SIMCOMP_PATH`
+## Smoke Test
 
-## First Test Prompts
+In a new Codex session, ask:
 
-After saving the MCP server and restarting Codex, try:
+```text
+Call discover_contam_installation and confirm CONTAM is available.
+```
 
-- `Call discover_contam_installation and confirm CONTAM is available.`
-- `List CONTAM case files in this folder.`
-- `Inspect this PRJ file and summarize its references and date range.`
-- `Run a test input only check for this PRJ.`
+Then try:
 
-## Troubleshooting
+```text
+Make this PRJ safe for ContamW Building Check and result review.
+```
 
-- If `npx` is not found, install Node.js and confirm `npx --version` works in a terminal.
-- If the server starts but cannot find CONTAM tools, keep the default repository layout or set explicit CONTAM environment variables.
-- If you use the local clone setup, make sure the working directory points to the repository root rather than a generic folder.
+The second prompt should use the workflow skill and the project guard script when a PRJ path is provided.

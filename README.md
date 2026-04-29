@@ -1,85 +1,150 @@
-# CONTAM MCP
+# CONTAM Plugin
 
-`CONTAM MCP` is a Windows-first MCP server that exposes CONTAM command-line tools and ContamX bridge-mode controls to AI agents.
+`CONTAM Plugin` is a Windows-first public toolkit for using CONTAM from AI coding agents and MCP-capable desktop tools.
 
-The project is designed for public use. It packages stable CONTAM automation workflows behind a standard MCP tool surface so an agent can inspect projects, diagnose broken inputs, run simulations, compare outputs, and drive bridge sessions over time.
+It combines three layers in one repository:
 
-The design is informed by the CONTAM API direction described in the Building Simulation paper "Development and Application of CONTAM APIs" and by the official ContamX documentation and bridge protocol materials from NIST.
+- a local `stdio` MCP server for CONTAM command-line tools and ContamX bridge sessions
+- a Codex plugin wrapper with workflow guidance for project creation, diagnosis, and simulation
+- guard scripts for PRJ hygiene, ContamW-safe result settings, and optional `contam_chinese` linkage
 
-## Why This Project Exists
+The project is designed for public use. It helps an agent inspect `.prj` models, diagnose missing references, run simulations, compare outputs, generate simple ContamW SketchPad layouts, and separate solver failures from ContamW GUI result-display problems.
 
-CONTAM is powerful, but most automation workflows still start from desktop usage patterns or manual case handling. This repository turns the practical parts of the CONTAM toolchain into an MCP server so agents can:
+## Quick Use Through MCP
 
-- inspect `.prj` models before running them
-- catch missing weather or support-file references
-- run `contamx3.exe` and collect outputs
-- compare `.sim` files
-- export `simread` text
-- control ContamX bridge-mode sessions step by step
+For most users, the easiest setup is an `npx`-launched local MCP server:
 
-## Host Compatibility
+```text
+command: npx
+args: -y --package github:summer521521/CONTAM_plugin contam-mcp
+```
 
-This server is not Codex-only.
-
-Any host that can launch a local `stdio` MCP server should be able to use it. Confirmed target hosts documented in this repository include:
-
-- Codex Desktop / Codex Windows App
-- Claude Code
-- Claude Desktop
-- Cursor
-- other MCP-capable local hosts
+The binary name remains `contam-mcp` because it launches the MCP server component. The repository and Codex plugin are named `CONTAM_plugin`.
 
 Host-specific setup examples are in:
 
 - [Host Setup Guide](docs/HOSTS.md)
 - [Codex Windows App Setup](docs/CODEX_WINDOWS_APP.md)
+- [Five-Minute Quickstart](docs/QUICKSTART.md)
 
-## Easiest Connection Option
+## Codex Plugin Use
 
-For public users, the easiest setup is now an `npx`-launched local server sourced from this repository.
+This repository can also be used as a Codex plugin source because the repository root contains:
 
-Use:
+- `.codex-plugin/plugin.json`
+- `.mcp.json`
+- `skills/contam-mcp/SKILL.md`
+- `scripts/start-contam-plugin-mcp.ps1`
+- `scripts/Invoke-ContamProjectGuard.ps1`
 
-```text
-command: npx
-args: -y --package github:summer521521/contam_MCP contam-mcp
-```
+The plugin adds a CONTAM workflow skill that tells Codex to:
 
-This avoids manually pointing a host at a local `server.js` path.
+- inspect before editing
+- keep case-specific data outside the plugin repository
+- run ContamX input checks before GUI work
+- keep only one active PRJ in a case folder unless scenarios are intentional
+- use GUI-safe output settings when the user will run from ContamW
+- record ContamW Building Check errors and fixes in case-local notes
 
 ## Main Capabilities
 
-- discover bundled CONTAM executables
-- find `.prj`, `.sim`, `.wth`, `.ctm`, and related files
-- inspect project metadata and external file references
+- discover bundled or configured CONTAM executables
+- list `.prj`, `.sim`, `.wth`, `.ctm`, and related files
+- inspect project metadata and external references
 - diagnose broken project references
-- update `.prj` file references
+- update supported `.prj` file references
 - clone baseline projects into named scenario folders
-- create and optionally run small case matrices from one baseline project
-- add generated ContamW SketchPad layout data for rectangular rooms, zone icons, path icons, and source/sink icons
-- run `contamx3.exe`
+- create and optionally run small case matrices
+- apply generated ContamW SketchPad layout data for rectangular rooms, zones, path icons, and source/sink icons
+- run `contamx3.exe` and collect outputs
+- run a PRJ guard for encoding, result profile, stale-output cleanup, XLog triage, and basic count checks
 - discover and use optional `contamxpy` bindings for paper-style ContamX API co-simulation
-- inspect API-level zones, paths, AHS, contaminants, and control nodes through `contamxpy`
-- advance models step by step through `contamxpy` while applying supported weather, AHS, zone, envelope, and control adjustments
 - discover Rhino/Grasshopper ANT availability for model-creation workflows
 - upgrade old `.prj` files with `prjup.exe`
 - compare `.sim` files with `simcomp.exe`
 - export `simread` text output
 - summarize generic CONTAM text outputs for quick result triage
 - start, inspect, advance, and close ContamX bridge sessions
-- adjust zones, junctions, ambient targets, AHS settings, and control nodes by ID or by name
 
-## Five-Minute Quickstart
+## Project Guard
 
-1. Configure your MCP host to run `npx -y --package github:summer521521/contam_MCP contam-mcp`.
-2. Restart the host.
-3. Ask the host to inspect or run a sample `.prj`.
+Before handing a generated PRJ to another user or asking someone to run it in ContamW, run:
 
-If you prefer a local clone, that path is still supported and documented in the host guide.
+```powershell
+.\scripts\Invoke-ContamProjectGuard.ps1 `
+  -ProjectPath "<case>\model.prj" `
+  -Mode InputCheck `
+  -ResultProfile GuiSafeResults `
+  -CleanOutputs `
+  -RequireSingleProject
+```
 
-For the full step-by-step tutorial, see:
+For a command-line full run:
 
-- [Five-Minute Quickstart](docs/QUICKSTART.md)
+```powershell
+.\scripts\Invoke-ContamProjectGuard.ps1 `
+  -ProjectPath "<case>\model.prj" `
+  -Mode Run `
+  -ResultProfile GuiSafeResults
+```
+
+The guard does not prove a hand-drawn SketchPad layout is perfect, but it catches common project-sharing and simulation issues before the GUI step.
+
+## Link With contam_chinese
+
+`CONTAM_plugin` can use the localized executables distributed by [`contam_chinese`](https://github.com/summer521521/contam_chinese).
+
+After extracting a `contam_chinese` release package, link it for the current PowerShell session:
+
+```powershell
+.\scripts\link-contam-chinese.ps1 -Path "<extracted-contam-chinese-release>"
+```
+
+Or persist it for your Windows user:
+
+```powershell
+.\scripts\link-contam-chinese.ps1 -Path "<extracted-contam-chinese-release>" -User
+```
+
+The launcher honors these variables in order:
+
+- explicit tool overrides such as `CONTAMX_PATH`
+- `CONTAM_HOME`
+- `CONTAM_CHINESE_HOME`
+- bundled executables in this repository
+
+Use `contam_chinese` for localized ContamW and Chinese help. Use `CONTAM_plugin` for MCP automation, project checks, simulation workflows, and report-oriented result extraction.
+
+## Repository Layout
+
+- `.codex-plugin/`: Codex plugin manifest
+- `.mcp.json`: MCP server launch definition for plugin hosts
+- `skills/`: Codex workflow skill for CONTAM work
+- `scripts/`: launch, guard, localization-link, setup, and maintenance scripts
+- `contam-mcp/`: MCP server source, developer guide, and regression scripts
+- `docs/`: public quickstart and host setup guides
+- `.github/workflows/`: GitHub Actions workflows
+- repository root: bundled CONTAM executables and supporting DLLs
+
+## Privacy And CI
+
+This repository includes a privacy check that scans tracked files for personal filesystem paths before public sharing:
+
+```powershell
+npm run privacy:check
+```
+
+Run the basic plugin launcher check with:
+
+```powershell
+npm run plugin:check
+```
+
+Run official regression cases with:
+
+```powershell
+npm run regression:official
+```
 
 ## Example Prompts
 
@@ -87,56 +152,19 @@ For the full step-by-step tutorial, see:
 - `List CONTAM case files in this folder.`
 - `Inspect this PRJ file and summarize its references and date range.`
 - `Run a test input only check for this PRJ.`
+- `Make this PRJ safe for ContamW Building Check and result review.`
 - `Run this PRJ and list the generated outputs.`
-- `Create baseline and intervention scenario folders from this PRJ.`
 - `Apply a rectangular SketchPad layout to this PRJ so ContamW opens with visible rooms and icons.`
 - `Run a small case matrix from this baseline model.`
 - `Analyze this CONTAM xlog or simread text export.`
 - `Discover whether contamxpy and ANT are available.`
-- `Inspect this PRJ through contamxpy and list zones, paths, AHS, and controls.`
-- `Run two contamxpy co-simulation steps and sample zone concentration and path flow.`
 - `Start a CONTAM bridge session for this project.`
-- `List the zones in the active bridge session.`
 - `Advance the active bridge session by 300 seconds and return path flow updates.`
-- `Close the active bridge session.`
-
-## Repository Layout
-
-- `contam-mcp/`: MCP server source, developer guide, and regression scripts
-- `docs/`: public quickstart and host setup guides
-- `.github/workflows/`: GitHub Actions workflows
-- repository root: bundled CONTAM executables and supporting DLLs
-
-## Privacy and CI
-
-This repository includes a privacy check that scans tracked files for personal filesystem paths before public sharing.
-
-Run it locally with:
-
-```powershell
-cd contam-mcp
-npm run privacy:check
-```
-
-GitHub Actions also runs this check automatically.
 
 ## References
 
-- [NIST CONTAM Download Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/download-contam)
-- [NIST CONTAM Documentation Page](https://www.nist.gov/el/beed/nist-multizone-modeling/software/contam/contam-documentation)
-- [Dols, Shen, Polidoro, et al. "Development and Application of CONTAM APIs" (Building Simulation, 2026)](https://doi.org/10.1007/s12273-025-1376-x)
-- [CONTAM User Guide and Program Documentation Version 3.4 (NIST TN 1887r1)](https://doi.org/10.6028/NIST.TN.1887r1)
-- [Host Setup Guide](docs/HOSTS.md)
-
-## For Maintainers
-
-If you want to extend the server, review bridge protocol coverage, or run the official regression suite, start here:
-
-- [Developer Guide](contam-mcp/README.md)
-
-Optional `contamxpy` setup for local API co-simulation:
-
-```powershell
-npm run setup:contamxpy
-npm run regression:contamxpy
-```
+- [contam_chinese](https://github.com/summer521521/contam_chinese)
+- [NIST CONTAM Download Page](https://www.nist.gov/el/energy-and-environment-division-73200/nist-multizone-modeling/software/contam/download)
+- [NIST CONTAM Software Page](https://www.nist.gov/services-resources/software/contam)
+- [NIST TN 1887r1](https://doi.org/10.6028/NIST.TN.1887r1)
+- [Model Context Protocol](https://modelcontextprotocol.io/)

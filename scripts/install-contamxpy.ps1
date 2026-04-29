@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 function Resolve-RepoRoot {
   $root = git rev-parse --show-toplevel 2>$null
   if ([string]::IsNullOrWhiteSpace($root)) {
-    throw "Run this script from inside the contam_MCP repository."
+    throw "Run this script from inside the CONTAM_plugin repository."
   }
   return $root.Trim()
 }

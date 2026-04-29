@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local MCP server that wraps CONTAM command-line tools for Codex Desktop on Windows.",
+  "description": "Local MCP server component for CONTAM Plugin on Windows.",
   "scripts": {
     "start": "node ./src/server.js",
     "inspect": "node --inspect ./src/server.js",

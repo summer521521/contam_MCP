@@ -1,0 +1,38 @@
+{
+  "name": "contam-plugin",
+  "version": "0.1.0",
+  "description": "Public Codex plugin and MCP toolkit for CONTAM project inspection, simulation, and ContamW-safe workflows.",
+  "author": {
+    "name": "summer521521",
+    "url": "https://github.com/summer521521"
+  },
+  "homepage": "https://github.com/summer521521/CONTAM_plugin",
+  "repository": "https://github.com/summer521521/CONTAM_plugin",
+  "license": "UNLICENSED",
+  "keywords": [
+    "codex",
+    "mcp",
+    "contam",
+    "simulation"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "CONTAM Plugin",
+    "shortDescription": "Run and inspect CONTAM projects through MCP.",
+    "longDescription": "Packages a local CONTAM MCP server, Codex workflow skill, project guard script, CONTAM Chinese localization linkage, installation/API discovery, project inspection, diagnostics, case hygiene, scenario cloning, case matrices, ContamW SketchPad layout generation, GUI-safe result settings, contamxpy co-simulation, simulation, text-result triage, and bridge sessions.",
+    "developerName": "summer521521",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Discover the CONTAM installation.",
+      "Diagnose this CONTAM project.",
+      "Run this CONTAM simulation.",
+      "Make this PRJ safe for ContamW Building Check and result review."
+    ],
+    "brandColor": "#7C3AED"
+  }
+}
